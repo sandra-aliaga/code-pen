@@ -22,6 +22,10 @@
       {
         "command": "code-pen.toggleDrawing",
         "title": "Toggle Drawing Mode"
+      },
+      {
+        "command": "code-pen.openCanvas",
+        "title": "Open Drawing Canvas"
       }
     ],
     "keybindings": [
@@ -29,6 +33,11 @@
         "command": "code-pen.toggleDrawing",
         "key": "ctrl+alt+d",
         "mac": "cmd+alt+d"
+      },
+      {
+        "command": "code-pen.openCanvas",
+        "key": "ctrl+alt+a",
+        "mac": "cmd+alt+a"
       }
     ]
   },
