@@ -9,13 +9,26 @@
   "categories": [
     "Other"
   ],
-  "activationEvents": [],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
   "main": "./out/extension.js",
   "contributes": {
     "commands": [
       {
         "command": "code-pen.helloWorld",
         "title": "Hello World"
+      },
+      {
+        "command": "code-pen.toggleDrawing",
+        "title": "Toggle Drawing Mode"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "code-pen.toggleDrawing",
+        "key": "ctrl+alt+d",
+        "mac": "cmd+alt+d"
       }
     ]
   },
