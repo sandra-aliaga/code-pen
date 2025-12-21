@@ -3,6 +3,67 @@
 import * as vscode from 'vscode';
 import { DollarRecognizer, Point } from './recognizer';
 
+// =============================================================================
+// PREDEFINED BLOCKS - Safe commands that users can use to build routines
+// =============================================================================
+interface Block {
+	id: string;
+	label: string;
+	icon: string;
+	command: string;
+	category: 'files' | 'focus' | 'appearance' | 'terminal' | 'git';
+}
+
+const PREDEFINED_BLOCKS: Block[] = [
+	// Files
+	{ id: 'save', label: 'Guardar', icon: '', command: 'workbench.action.files.save', category: 'files' },
+	{ id: 'saveAll', label: 'Guardar Todo', icon: '', command: 'workbench.action.files.saveAll', category: 'files' },
+	{ id: 'format', label: 'Formatear', icon: '', command: 'editor.action.formatDocument', category: 'files' },
+	{ id: 'closeEditor', label: 'Cerrar Editor', icon: '', command: 'workbench.action.closeActiveEditor', category: 'files' },
+	{ id: 'closeAll', label: 'Cerrar Todo', icon: '', command: 'workbench.action.closeAllEditors', category: 'files' },
+
+	// Focus
+	{ id: 'zenMode', label: 'Modo Zen', icon: '', command: 'workbench.action.toggleZenMode', category: 'focus' },
+	{ id: 'toggleSidebar', label: 'Toggle Sidebar', icon: '', command: 'workbench.action.toggleSidebarVisibility', category: 'focus' },
+	{ id: 'togglePanel', label: 'Toggle Panel', icon: '', command: 'workbench.action.togglePanel', category: 'focus' },
+	{ id: 'fullScreen', label: 'Pantalla Completa', icon: '', command: 'workbench.action.toggleFullScreen', category: 'focus' },
+	{ id: 'toggleMinimap', label: 'Toggle Minimap', icon: '', command: 'editor.action.toggleMinimap', category: 'focus' },
+
+	// Appearance
+	{ id: 'changeTheme', label: 'Cambiar Tema', icon: '', command: 'workbench.action.selectTheme', category: 'appearance' },
+	{ id: 'zoomIn', label: 'Aumentar Fuente', icon: '', command: 'editor.action.fontZoomIn', category: 'appearance' },
+	{ id: 'zoomOut', label: 'Reducir Fuente', icon: '', command: 'editor.action.fontZoomOut', category: 'appearance' },
+	{ id: 'zoomReset', label: 'Reset Fuente', icon: '', command: 'editor.action.fontZoomReset', category: 'appearance' },
+
+	// Terminal
+	{ id: 'newTerminal', label: 'Nueva Terminal', icon: '', command: 'workbench.action.terminal.new', category: 'terminal' },
+	{ id: 'toggleTerminal', label: 'Toggle Terminal', icon: '', command: 'workbench.action.terminal.toggleTerminal', category: 'terminal' },
+	{ id: 'clearTerminal', label: 'Limpiar Terminal', icon: '', command: 'workbench.action.terminal.clear', category: 'terminal' },
+
+	// Git
+	{ id: 'gitCommit', label: 'Git Commit', icon: '', command: 'git.commit', category: 'git' },
+	{ id: 'gitPush', label: 'Git Push', icon: '', command: 'git.push', category: 'git' },
+	{ id: 'gitPull', label: 'Git Pull', icon: '', command: 'git.pull', category: 'git' },
+	{ id: 'gitStash', label: 'Git Stash', icon: '', command: 'git.stash', category: 'git' },
+	{ id: 'gitStashPop', label: 'Git Stash Pop', icon: '', command: 'git.stashPop', category: 'git' },
+];
+
+// =============================================================================
+// ROUTINE STRUCTURE - A routine is a gesture + sequence of commands
+// =============================================================================
+interface Routine {
+	name: string;
+	commands: string[];  // Array of command IDs to execute in sequence
+	samples: { x: number; y: number }[][];  // Gesture samples for recognition
+}
+
+// Store for routines: RoutineName -> Routine
+let routineStore: Record<string, Routine> = {};
+
+// =============================================================================
+// GLOBAL STATE
+// =============================================================================
+
 // Global state for drawing mode
 let isDrawingMode = false;
 let statusBarItem: vscode.StatusBarItem;
@@ -12,8 +73,6 @@ let drawingDecorationType: vscode.TextEditorDecorationType;
 // Array to store the selections that represent the current gesture
 let currentGestureRanges: vscode.Selection[] = [];
 
-// Store for recorded gestures: CommandID -> Array of Strokes (Points[])
-let gestureStore: Record<string, {x:number, y:number}[][]> = {};
 
 // Reference to the panel to communicate with it
 let currentPanel: vscode.WebviewPanel | undefined = undefined;
@@ -26,9 +85,9 @@ export function activate(context: vscode.ExtensionContext) {
 	// This line of code will only be executed once when your extension is activated
 	console.log('Congratulations, your extension "code-pen" is now active!');
 
-	// Load gestures from global state on activation
-	gestureStore = context.globalState.get('codePen.gestures', {});
-	console.log('Loaded gestures from globalState:', gestureStore);
+	// Load routines from global state on activation
+	routineStore = context.globalState.get('codePen.routines', {});
+	console.log('Loaded routines from globalState:', routineStore);
 
 	// Create an output channel to show the coordinates to the user
 	const outputChannel = vscode.window.createOutputChannel("Code Pen Debug");
@@ -93,7 +152,7 @@ export function activate(context: vscode.ExtensionContext) {
 		
 		currentPanel = panel;
 
-		panel.webview.html = getWebviewContent();
+		panel.webview.html = getWebviewContent(PREDEFINED_BLOCKS, routineStore);
 
 		// Cleanup when panel is closed
 		panel.onDidDispose(
@@ -111,88 +170,37 @@ export function activate(context: vscode.ExtensionContext) {
 					case 'log':
 						outputChannel.appendLine(message.text);
 						return;
-										case 'requestCommandPick':
-											// Show the QuickPick to select a command
-											const allCommands = await vscode.commands.getCommands(true);
-											
-											// Build a map of metadata from extensions
-											const commandMetadata = new Map<string, { title: string, keybinding?: string }>();
-											
-											for (const ext of vscode.extensions.all) {
-												const contributes = ext.packageJSON?.contributes;
-												if (!contributes) continue;
-					
-												// Map Titles
-												if (contributes.commands) {
-													for (const cmd of contributes.commands) {
-														commandMetadata.set(cmd.command, { title: cmd.title });
-													}
-												}
-												
-												// Map Keybindings (append to existing metadata if present)
-												if (contributes.keybindings) {
-													for (const kb of contributes.keybindings) {
-														const existing = commandMetadata.get(kb.command);
-														if (existing) {
-															existing.keybinding = kb.key;
-														} else {
-															// If we have a keybinding but no command title definition (rare but possible)
-															commandMetadata.set(kb.command, { title: kb.command, keybinding: kb.key });
-														}
-													}
-												}
-											}
-					
-											// Create QuickPickItems
-											const items: vscode.QuickPickItem[] = allCommands.map(cmdId => {
-												const meta = commandMetadata.get(cmdId);
-												if (meta) {
-													return {
-														label: meta.title,
-														description: cmdId,
-														detail: meta.keybinding ? `Keybinding: ${meta.keybinding}` : undefined,
-														// Store ID in a hidden way or just use description later
-														picked: false 
-													};
-												} else {
-													// Fallback for built-in commands or those without metadata
-													return {
-														label: cmdId,
-														description: "Built-in / No metadata",
-													};
-												}
-											});
-					
-											// Sort alphabetically
-											items.sort((a, b) => a.label.localeCompare(b.label));
-					
-											const selectedItem = await vscode.window.showQuickPick(items, {
-												placeHolder: 'Select a command to associate with the gesture',
-												matchOnDescription: true,
-												matchOnDetail: true
-											});
-											
-											if (selectedItem) {
-												// Use description (which contains the ID for enhanced items) or label (for simple items)
-												// Wait, for enhanced items label is Title. We need the ID.
-												// Let's recover the ID.
-												const commandId = selectedItem.description === "Built-in / No metadata" ? selectedItem.label : selectedItem.description;
-					
-												if (commandId) {
-													panel.webview.postMessage({ 
-														command: 'startRecording', 
-														targetCommand: commandId 
-													});
-												}
-											}
-											return;					case 'saveGesture':
-						// Store the gesture in memory
-						gestureStore[message.targetCommand] = message.samples;
+
+					case 'saveRoutine':
+						// Save the routine with its commands and gesture samples
+						const routine: Routine = {
+							name: message.name,
+							commands: message.commands,
+							samples: message.samples
+						};
+						routineStore[message.name] = routine;
 						// Persist to global state
-						context.globalState.update('codePen.gestures', gestureStore);
-						vscode.window.showInformationMessage(`Gesture saved for: ${message.targetCommand} (${message.samples.length} samples)`);
-						outputChannel.appendLine(`SAVED GESTURE for ${message.targetCommand}. Samples: ${message.samples.length}`);
+						context.globalState.update('codePen.routines', routineStore);
+						vscode.window.showInformationMessage(`Rutina guardada: "${message.name}" (${message.commands.length} comandos)`);
+						outputChannel.appendLine(`SAVED ROUTINE "${message.name}". Commands: ${message.commands.join(' -> ')}`);
+						// Send updated routines back to webview
+						panel.webview.postMessage({
+							command: 'routinesUpdated',
+							routines: routineStore
+						});
 						return;
+
+					case 'deleteRoutine':
+						delete routineStore[message.name];
+						context.globalState.update('codePen.routines', routineStore);
+						vscode.window.showInformationMessage(`Rutina eliminada: "${message.name}"`);
+						// Send updated routines back to webview
+						panel.webview.postMessage({
+							command: 'routinesUpdated',
+							routines: routineStore
+						});
+						return;
+
 					case 'stroke':
 						outputChannel.appendLine(`Canvas Stroke: ${JSON.stringify(message.points)}`);
 						return;
@@ -238,11 +246,11 @@ export function activate(context: vscode.ExtensionContext) {
 					return { x: s.active.character, y: s.active.line };
 				});
 
-				// 2. Prepare templates from store
-				const templates = Object.keys(gestureStore).map(commandName => {
+				// 2. Prepare templates from routineStore
+				const templates = Object.keys(routineStore).map(routineName => {
 					return {
-						name: commandName,
-						points: gestureStore[commandName] // This is Point[][] (array of samples)
+						name: routineName,
+						points: routineStore[routineName].samples // This is Point[][] (array of samples)
 					};
 				});
 
@@ -252,14 +260,27 @@ export function activate(context: vscode.ExtensionContext) {
 					outputChannel.appendLine(`RECOGNITION RESULT: ${result.name} (Score: ${result.score.toFixed(2)})`);
 
 					if (result.score > 0.80) {
-						vscode.window.showInformationMessage(`Gesture Detected: ${result.name}`);
-						// Execute the command
-						vscode.commands.executeCommand(result.name);
+						const routine = routineStore[result.name];
+						vscode.window.showInformationMessage(`Rutina detectada: "${result.name}"`);
+						outputChannel.appendLine(`Executing routine: ${routine.commands.join(' -> ')}`);
+
+						// Execute all commands in sequence
+						(async () => {
+							for (const cmd of routine.commands) {
+								outputChannel.appendLine(`  -> Executing: ${cmd}`);
+								try {
+									await vscode.commands.executeCommand(cmd);
+								} catch (err) {
+									outputChannel.appendLine(`  -> Error executing ${cmd}: ${err}`);
+								}
+							}
+							outputChannel.appendLine(`Routine "${result.name}" completed.`);
+						})();
 					} else {
-						vscode.window.setStatusBarMessage(`Gesture not recognized (Score: ${result.score.toFixed(2)})`, 3000);
+						vscode.window.setStatusBarMessage(`Gesto no reconocido (Score: ${result.score.toFixed(2)})`, 3000);
 					}
 				} else {
-					outputChannel.appendLine("No gestures recorded yet.");
+					outputChannel.appendLine("No routines recorded yet.");
 				}
 			}
 
@@ -289,176 +310,500 @@ function updateStatusBar() {
 	statusBarItem.show();
 }
 
-function getWebviewContent() {
+function getWebviewContent(blocks: Block[], routines: Record<string, Routine>) {
+	const blocksJson = JSON.stringify(blocks);
+	const routinesJson = JSON.stringify(routines);
+
 	return `<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Code Pen Canvas</title>
+    <title>Code Pen - Rutinas</title>
     <style>
-        body { 
-            margin: 0; 
-            padding: 0; 
-            overflow: hidden; 
-            background-color: var(--vscode-editor-background); 
-			font-family: var(--vscode-font-family);
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            padding: 16px;
+            background-color: var(--vscode-editor-background);
+            font-family: var(--vscode-font-family);
+            color: var(--vscode-editor-foreground);
+            min-height: 100vh;
         }
-		.controls {
-			position: absolute;
-			top: 10px;
-			left: 10px;
-			display: flex;
-			gap: 10px;
-			align-items: center;
-			z-index: 10;
-		}
-		button {
-			background: var(--vscode-button-background);
-			color: var(--vscode-button-foreground);
-			border: none;
-			padding: 6px 12px;
-			cursor: pointer;
-			font-size: 13px;
-		}
-		button:hover {
-			background: var(--vscode-button-hoverBackground);
-		}
-        canvas { 
-            display: block; 
-            cursor: crosshair; 
+        h1 { margin: 0 0 16px 0; font-size: 1.4em; }
+        h2 { margin: 0 0 12px 0; font-size: 1.1em; opacity: 0.9; }
+        h3 { margin: 0 0 8px 0; font-size: 0.95em; opacity: 0.7; text-transform: uppercase; }
+
+        button {
+            background: var(--vscode-button-background);
+            color: var(--vscode-button-foreground);
+            border: none;
+            padding: 8px 16px;
+            cursor: pointer;
+            font-size: 13px;
+            border-radius: 4px;
         }
-        #status { 
-			color: var(--vscode-editor-foreground); 
-			opacity: 0.8;
-			font-size: 14px;
+        button:hover { background: var(--vscode-button-hoverBackground); }
+        button.secondary {
+            background: var(--vscode-button-secondaryBackground);
+            color: var(--vscode-button-secondaryForeground);
         }
+        button.danger { background: #c53030; }
+        button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        input[type="text"] {
+            background: var(--vscode-input-background);
+            color: var(--vscode-input-foreground);
+            border: 1px solid var(--vscode-input-border);
+            padding: 8px 12px;
+            font-size: 13px;
+            border-radius: 4px;
+            width: 100%;
+        }
+
+        /* Views */
+        .view { display: none; }
+        .view.active { display: block; }
+
+        /* Main View - Routine List */
+        .routine-list { display: flex; flex-direction: column; gap: 8px; margin-top: 16px; }
+        .routine-card {
+            background: var(--vscode-editor-inactiveSelectionBackground);
+            border: 1px solid var(--vscode-panel-border);
+            border-radius: 6px;
+            padding: 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .routine-info { flex: 1; }
+        .routine-name { font-weight: bold; margin-bottom: 4px; }
+        .routine-commands { font-size: 12px; opacity: 0.7; }
+        .routine-actions { display: flex; gap: 8px; }
+        .routine-actions button { padding: 4px 8px; font-size: 12px; }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px;
+            opacity: 0.6;
+        }
+
+        /* Create View */
+        .create-container { display: flex; flex-direction: column; gap: 16px; }
+        .step { display: none; }
+        .step.active { display: block; }
+
+        .blocks-section { display: flex; gap: 16px; margin-top: 8px; }
+        .blocks-available { flex: 1; }
+        .blocks-selected { flex: 1; }
+
+        .category { margin-bottom: 16px; }
+        .blocks-grid { display: flex; flex-wrap: wrap; gap: 6px; }
+
+        .block {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 10px;
+            background: var(--vscode-badge-background);
+            color: var(--vscode-badge-foreground);
+            border-radius: 4px;
+            font-size: 12px;
+            cursor: pointer;
+            user-select: none;
+            transition: transform 0.1s, box-shadow 0.1s;
+        }
+        .block:hover { transform: translateY(-1px); box-shadow: 0 2px 4px rgba(0,0,0,0.2); }
+        .block .icon { font-size: 14px; }
+
+        .selected-list {
+            min-height: 100px;
+            background: var(--vscode-editor-inactiveSelectionBackground);
+            border: 2px dashed var(--vscode-panel-border);
+            border-radius: 6px;
+            padding: 8px;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        .selected-list.empty::before {
+            content: 'Haz clic en los bloques para agregarlos aqui';
+            display: block;
+            text-align: center;
+            padding: 30px;
+            opacity: 0.5;
+            font-size: 12px;
+        }
+
+        .selected-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px;
+            background: var(--vscode-button-background);
+            color: var(--vscode-button-foreground);
+            border-radius: 4px;
+            font-size: 12px;
+        }
+        .selected-item .order {
+            background: rgba(255,255,255,0.2);
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-weight: bold;
+        }
+        .selected-item .remove {
+            margin-left: auto;
+            cursor: pointer;
+            opacity: 0.7;
+        }
+        .selected-item .remove:hover { opacity: 1; }
+
+        /* Canvas View */
+        .canvas-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 16px;
+        }
+        #drawingCanvas {
+            border: 2px solid var(--vscode-panel-border);
+            border-radius: 8px;
+            cursor: crosshair;
+            background: var(--vscode-editor-background);
+        }
+        .sample-indicators {
+            display: flex;
+            gap: 12px;
+            font-size: 24px;
+        }
+        .sample-dot { opacity: 0.3; }
+        .sample-dot.done { opacity: 1; }
+
+        .nav-buttons { display: flex; gap: 8px; margin-top: 16px; }
     </style>
 </head>
 <body>
-    <div class="controls">
-		<button id="btnRecord">Record New Gesture</button>
-		<span id="status">Free Drawing Mode</span>
-	</div>
-    <canvas id="drawingCanvas"></canvas>
+    <!-- MAIN VIEW: List of Routines -->
+    <div id="mainView" class="view active">
+        <h1>Code Pen - Rutinas</h1>
+        <button id="btnNewRoutine">+ Nueva Rutina</button>
+        <div id="routineList" class="routine-list"></div>
+    </div>
+
+    <!-- CREATE VIEW: Build a Routine -->
+    <div id="createView" class="view">
+        <h1>Crear Nueva Rutina</h1>
+
+        <!-- Step 1: Name and Commands -->
+        <div id="step1" class="step active">
+            <div class="create-container">
+                <div>
+                    <h3>Nombre de la Rutina</h3>
+                    <input type="text" id="routineName" placeholder="Ej: Modo Focus, Deploy Rapido...">
+                </div>
+
+                <div class="blocks-section">
+                    <div class="blocks-available">
+                        <h2>Bloques Disponibles</h2>
+                        <div id="blocksContainer"></div>
+                    </div>
+                    <div class="blocks-selected">
+                        <h2>Tu Rutina</h2>
+                        <div id="selectedBlocks" class="selected-list empty"></div>
+                    </div>
+                </div>
+
+                <div class="nav-buttons">
+                    <button class="secondary" id="btnCancelCreate">Cancelar</button>
+                    <button id="btnNextStep" disabled>Siguiente: Dibujar Gesto</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Step 2: Draw Gesture -->
+        <div id="step2" class="step">
+            <div class="canvas-container">
+                <h2>Dibuja el gesto para: <span id="gestureRoutineName"></span></h2>
+                <p style="opacity: 0.7; margin: 0;">Dibuja el mismo gesto 3 veces para registrarlo</p>
+
+                <div class="sample-indicators">
+                    <span class="sample-dot" id="dot1">○</span>
+                    <span class="sample-dot" id="dot2">○</span>
+                    <span class="sample-dot" id="dot3">○</span>
+                </div>
+
+                <canvas id="drawingCanvas" width="400" height="300"></canvas>
+
+                <div class="nav-buttons">
+                    <button class="secondary" id="btnBackStep">Atras</button>
+                    <button id="btnSaveRoutine" disabled>Guardar Rutina</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script>
         const vscode = acquireVsCodeApi();
+
+        // Data from extension
+        const BLOCKS = ${blocksJson};
+        let routines = ${routinesJson};
+
+        // State
+        let selectedCommands = [];
+        let recordedSamples = [];
+        const REQUIRED_SAMPLES = 3;
+
+        // DOM Elements
+        const mainView = document.getElementById('mainView');
+        const createView = document.getElementById('createView');
+        const step1 = document.getElementById('step1');
+        const step2 = document.getElementById('step2');
+        const routineList = document.getElementById('routineList');
+        const blocksContainer = document.getElementById('blocksContainer');
+        const selectedBlocksEl = document.getElementById('selectedBlocks');
+        const routineNameInput = document.getElementById('routineName');
+        const btnNextStep = document.getElementById('btnNextStep');
+        const btnSaveRoutine = document.getElementById('btnSaveRoutine');
+        const gestureRoutineName = document.getElementById('gestureRoutineName');
+
+        // Canvas
         const canvas = document.getElementById('drawingCanvas');
         const ctx = canvas.getContext('2d');
-        const statusSpan = document.getElementById('status');
-		const btnRecord = document.getElementById('btnRecord');
-        
         let painting = false;
         let points = [];
 
-		// Recording State
-		let isRecording = false;
-		let targetCommand = "";
-		let recordedSamples = [];
-		const REQUIRED_SAMPLES = 3;
+        // Initialize
+        renderBlocks();
+        renderRoutineList();
+        setupCanvas();
 
-        // Helper to get CSS variable value
-        function getThemeColor(variableName) {
-            return getComputedStyle(document.documentElement).getPropertyValue(variableName).trim();
+        // Event Listeners
+        document.getElementById('btnNewRoutine').addEventListener('click', () => {
+            showView('create');
+            resetCreateForm();
+        });
+
+        document.getElementById('btnCancelCreate').addEventListener('click', () => {
+            showView('main');
+        });
+
+        document.getElementById('btnBackStep').addEventListener('click', () => {
+            showStep(1);
+        });
+
+        btnNextStep.addEventListener('click', () => {
+            showStep(2);
+            gestureRoutineName.textContent = routineNameInput.value;
+            recordedSamples = [];
+            updateSampleDots();
+        });
+
+        btnSaveRoutine.addEventListener('click', () => {
+            vscode.postMessage({
+                command: 'saveRoutine',
+                name: routineNameInput.value,
+                commands: selectedCommands.map(b => b.command),
+                samples: recordedSamples
+            });
+            showView('main');
+        });
+
+        routineNameInput.addEventListener('input', validateStep1);
+
+        // Handle messages from extension
+        window.addEventListener('message', event => {
+            const message = event.data;
+            if (message.command === 'routinesUpdated') {
+                routines = message.routines;
+                renderRoutineList();
+            }
+        });
+
+        // Functions
+        function showView(view) {
+            mainView.classList.toggle('active', view === 'main');
+            createView.classList.toggle('active', view === 'create');
         }
 
-        function resize() {
-            canvas.width = window.innerWidth;
-            canvas.height = window.innerHeight;
+        function showStep(step) {
+            step1.classList.toggle('active', step === 1);
+            step2.classList.toggle('active', step === 2);
+        }
+
+        function resetCreateForm() {
+            routineNameInput.value = '';
+            selectedCommands = [];
+            recordedSamples = [];
+            renderSelectedBlocks();
+            validateStep1();
+            showStep(1);
+        }
+
+        function renderBlocks() {
+            const categories = {
+                files: { name: 'Archivos', blocks: [] },
+                focus: { name: 'Concentracion', blocks: [] },
+                appearance: { name: 'Apariencia', blocks: [] },
+                terminal: { name: 'Terminal', blocks: [] },
+                git: { name: 'Git', blocks: [] }
+            };
+
+            BLOCKS.forEach(block => {
+                categories[block.category].blocks.push(block);
+            });
+
+            blocksContainer.innerHTML = Object.entries(categories).map(([key, cat]) => {
+                return '<div class="category">' +
+                    '<h3>' + cat.name + '</h3>' +
+                    '<div class="blocks-grid">' +
+                    cat.blocks.map(b =>
+                        '<div class="block" data-id="' + b.id + '">' +
+                        '<span>' + b.label + '</span>' +
+                        '</div>'
+                    ).join('') +
+                    '</div></div>';
+            }).join('');
+
+            // Add click handlers
+            blocksContainer.querySelectorAll('.block').forEach(el => {
+                el.addEventListener('click', () => {
+                    const block = BLOCKS.find(b => b.id === el.dataset.id);
+                    if (block) {
+                        selectedCommands.push(block);
+                        renderSelectedBlocks();
+                        validateStep1();
+                    }
+                });
+            });
+        }
+
+        function renderSelectedBlocks() {
+            if (selectedCommands.length === 0) {
+                selectedBlocksEl.innerHTML = '';
+                selectedBlocksEl.classList.add('empty');
+            } else {
+                selectedBlocksEl.classList.remove('empty');
+                selectedBlocksEl.innerHTML = selectedCommands.map((block, i) =>
+                    '<div class="selected-item">' +
+                    '<span class="order">' + (i + 1) + '</span>' +
+                    '<span>' + block.label + '</span>' +
+                    '<span class="remove" data-index="' + i + '">x</span>' +
+                    '</div>'
+                ).join('');
+
+                // Add remove handlers
+                selectedBlocksEl.querySelectorAll('.remove').forEach(el => {
+                    el.addEventListener('click', () => {
+                        selectedCommands.splice(parseInt(el.dataset.index), 1);
+                        renderSelectedBlocks();
+                        validateStep1();
+                    });
+                });
+            }
+        }
+
+        function validateStep1() {
+            const hasName = routineNameInput.value.trim().length > 0;
+            const hasCommands = selectedCommands.length > 0;
+            btnNextStep.disabled = !(hasName && hasCommands);
+        }
+
+        function renderRoutineList() {
+            const names = Object.keys(routines);
+            if (names.length === 0) {
+                routineList.innerHTML = '<div class="empty-state">No hay rutinas creadas.<br>Crea tu primera rutina!</div>';
+            } else {
+                routineList.innerHTML = names.map(name => {
+                    const r = routines[name];
+                    const cmdLabels = r.commands.map(cmd => {
+                        const block = BLOCKS.find(b => b.command === cmd);
+                        return block ? block.label : cmd;
+                    }).join(' -> ');
+
+                    return '<div class="routine-card">' +
+                        '<div class="routine-info">' +
+                        '<div class="routine-name">' + r.name + '</div>' +
+                        '<div class="routine-commands">' + cmdLabels + '</div>' +
+                        '</div>' +
+                        '<div class="routine-actions">' +
+                        '<button class="danger" data-delete="' + name + '">Eliminar</button>' +
+                        '</div>' +
+                        '</div>';
+                }).join('');
+
+                // Add delete handlers
+                routineList.querySelectorAll('[data-delete]').forEach(el => {
+                    el.addEventListener('click', () => {
+                        if (confirm('Eliminar rutina "' + el.dataset.delete + '"?')) {
+                            vscode.postMessage({ command: 'deleteRoutine', name: el.dataset.delete });
+                        }
+                    });
+                });
+            }
+        }
+
+        // Canvas Setup
+        function setupCanvas() {
             ctx.lineCap = 'round';
             ctx.lineJoin = 'round';
-            // Use editor cursor color or fallback to yellow
-            ctx.strokeStyle = getThemeColor('--vscode-editorCursor-foreground') || '#FFD700';
-            ctx.lineWidth = 5;
+            ctx.strokeStyle = '#FFD700';
+            ctx.lineWidth = 4;
+
+            canvas.addEventListener('mousedown', startPosition);
+            canvas.addEventListener('mouseup', finishedPosition);
+            canvas.addEventListener('mousemove', draw);
+            canvas.addEventListener('mouseleave', finishedPosition);
         }
-        window.addEventListener('resize', resize);
-        resize();
-
-		// Button Logic
-		btnRecord.addEventListener('click', () => {
-			vscode.postMessage({ command: 'requestCommandPick' });
-		});
-
-		// Handle messages from Extension
-		window.addEventListener('message', event => {
-			const message = event.data;
-			switch (message.command) {
-				case 'startRecording':
-					isRecording = true;
-					targetCommand = message.targetCommand;
-					recordedSamples = []; // Reset samples
-					statusSpan.innerText = "Recording for: " + targetCommand + " (Draw 1/" + REQUIRED_SAMPLES + ")";
-					statusSpan.style.color = "#FFD700"; // Highlight
-					break;
-			}
-		});
 
         function startPosition(e) {
             painting = true;
-            points = []; // Start new stroke
-            ctx.strokeStyle = getThemeColor('--vscode-editorCursor-foreground') || '#FFD700';
+            points = [];
             draw(e);
         }
 
         function finishedPosition() {
-			if (!painting) return;
+            if (!painting) return;
             painting = false;
             ctx.beginPath();
-			
-			// Logic: Handle stroke
-            if (points.length > 5) { // Ignore tiny accidental clicks
-				if (isRecording) {
-					recordedSamples.push(points);
-					const count = recordedSamples.length;
-					
-					if (count < REQUIRED_SAMPLES) {
-						statusSpan.innerText = "Recording for: " + targetCommand + " (Draw " + (count + 1) + "/" + REQUIRED_SAMPLES + ")";
-					} else {
-						// Finished!
-						vscode.postMessage({
-							command: 'saveGesture',
-							targetCommand: targetCommand,
-							samples: recordedSamples
-						});
-						
-						// Reset UI
-						isRecording = false;
-						statusSpan.innerText = "Gesture Saved! Back to Free Drawing.";
-						statusSpan.style.color = "";
-						setTimeout(() => { statusSpan.innerText = "Free Drawing Mode"; }, 3000);
-					}
 
-				} else {
-					// Normal Free Drawing
-                	vscode.postMessage({ command: 'stroke', points: points });
-				}
+            if (points.length > 5) {
+                recordedSamples.push(points);
+                updateSampleDots();
+
+                if (recordedSamples.length >= REQUIRED_SAMPLES) {
+                    btnSaveRoutine.disabled = false;
+                }
             }
 
             points = [];
-            // Clear the canvas after stroke is finished
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            setTimeout(() => ctx.clearRect(0, 0, canvas.width, canvas.height), 300);
         }
 
         function draw(e) {
             if (!painting) return;
-            
             const rect = canvas.getBoundingClientRect();
             const x = e.clientX - rect.left;
             const y = e.clientY - rect.top;
-
             points.push({x, y});
-
             ctx.lineTo(x, y);
             ctx.stroke();
             ctx.beginPath();
             ctx.moveTo(x, y);
         }
 
-        canvas.addEventListener('mousedown', startPosition);
-        canvas.addEventListener('mouseup', finishedPosition);
-        canvas.addEventListener('mousemove', draw);
-        canvas.addEventListener('mouseleave', finishedPosition);
-
+        function updateSampleDots() {
+            for (let i = 1; i <= 3; i++) {
+                const dot = document.getElementById('dot' + i);
+                if (recordedSamples.length >= i) {
+                    dot.textContent = '●';
+                    dot.classList.add('done');
+                } else {
+                    dot.textContent = '○';
+                    dot.classList.remove('done');
+                }
+            }
+        }
     </script>
 </body>
 </html>`;
