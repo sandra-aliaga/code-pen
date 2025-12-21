@@ -1,8 +1,8 @@
 /**
  * The $1 Unistroke Recognizer (JavaScript version)
  *
- *  M. Wobbrock, A.D. Wilson, Y. Li. 
- *  "Gestures without Libraries, Toolkits or Training: A $1 Recognizer for User Interface Prototypes." 
+ *  M. Wobbrock, A.D. Wilson, Y. Li.
+ *  "Gestures without Libraries, Toolkits or Training: A $1 Recognizer for User Interface Prototypes."
  *  UIST 2007.
  */
 
@@ -26,11 +26,16 @@ const AnglePrecision = 2.0;
 const Phi = 0.5 * (-1.0 + Math.sqrt(5.0)); // Golden Ratio
 
 export class DollarRecognizer {
-    
     // Recognize a gesture against a set of templates
     // templates: { name: string, points: Point[] }[]
     // candidate: Point[] (the raw input stroke)
-    static recognize(candidateRaw: Point[], templates: { name: string, points: Point[][] }[]): Result {
+    static recognize(
+        candidateRaw: Point[],
+        templates: {
+            name: string;
+            points: Point[][];
+        }[]
+    ): Result {
         if (candidateRaw.length < 5) {
             return { name: "", score: 0 };
         }
@@ -50,10 +55,10 @@ export class DollarRecognizer {
 
             for (const sampleRaw of samples) {
                 const sample = this.normalize(sampleRaw);
-                
+
                 // Calculate distance (Golden Section Search)
                 const distance = this.distanceAtBestAngle(candidate, sample, -AngleRange, +AngleRange, AnglePrecision);
-                
+
                 if (distance < bestDistance) {
                     bestDistance = distance;
                     bestTemplate = commandName;
@@ -61,7 +66,7 @@ export class DollarRecognizer {
             }
         }
 
-        const score = 1.0 - (bestDistance / HalfDiagonal);
+        const score = 1.0 - bestDistance / HalfDiagonal;
         return { name: bestTemplate, score: score };
     }
 
@@ -80,14 +85,14 @@ export class DollarRecognizer {
         const I = this.pathLength(points) / (n - 1);
         let D = 0.0;
         const newPoints: Point[] = [points[0]];
-        
+
         // Clone points to avoid modifying original
         const srcPts = [...points];
-        
+
         let i = 1;
         while (i < srcPts.length) {
             const d = this.distance(srcPts[i - 1], srcPts[i]);
-            if ((D + d) >= I) {
+            if (D + d >= I) {
                 const qx = srcPts[i - 1].x + ((I - D) / d) * (srcPts[i].x - srcPts[i - 1].x);
                 const qy = srcPts[i - 1].y + ((I - D) / d) * (srcPts[i].y - srcPts[i - 1].y);
                 const q = { x: qx, y: qy };
@@ -99,7 +104,7 @@ export class DollarRecognizer {
                 i++;
             }
         }
-        
+
         if (newPoints.length === n - 1) {
             newPoints.push(srcPts[srcPts.length - 1]);
         }
@@ -118,7 +123,7 @@ export class DollarRecognizer {
         return points.map(p => {
             return {
                 x: (p.x - c.x) * cos - (p.y - c.y) * sin + c.x,
-                y: (p.x - c.x) * sin + (p.y - c.y) * cos + c.y
+                y: (p.x - c.x) * sin + (p.y - c.y) * cos + c.y,
             };
         });
     }
@@ -139,7 +144,7 @@ export class DollarRecognizer {
         return points.map(p => {
             return {
                 x: p.x - c.x,
-                y: p.y - c.y
+                y: p.y - c.y,
             };
         });
     }
@@ -149,7 +154,7 @@ export class DollarRecognizer {
         let f1 = this.distanceAtAngle(points, T, x1);
         let x2 = (1.0 - Phi) * a + Phi * b;
         let f2 = this.distanceAtAngle(points, T, x2);
-        
+
         while (Math.abs(b - a) > threshold) {
             if (f1 < f2) {
                 b = x2;
@@ -176,7 +181,7 @@ export class DollarRecognizer {
     static pathDistance(pts1: Point[], pts2: Point[]): number {
         let d = 0.0;
         // Typically pts1 and pts2 have same length after resampling
-        const len = Math.min(pts1.length, pts2.length); 
+        const len = Math.min(pts1.length, pts2.length);
         for (let i = 0; i < len; i++) {
             d += this.distance(pts1[i], pts2[i]);
         }
@@ -198,7 +203,8 @@ export class DollarRecognizer {
     }
 
     static centroid(points: Point[]): Point {
-        let x = 0.0, y = 0.0;
+        let x = 0.0,
+            y = 0.0;
         points.forEach(p => {
             x += p.x;
             y += p.y;
@@ -206,8 +212,11 @@ export class DollarRecognizer {
         return { x: x / points.length, y: y / points.length };
     }
 
-    static boundingBox(points: Point[]): { x: number, y: number, width: number, height: number } {
-        let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    static boundingBox(points: Point[]): { x: number; y: number; width: number; height: number } {
+        let minX = Infinity,
+            maxX = -Infinity,
+            minY = Infinity,
+            maxY = -Infinity;
         points.forEach(p => {
             minX = Math.min(minX, p.x);
             minY = Math.min(minY, p.y);
@@ -217,11 +226,11 @@ export class DollarRecognizer {
         return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
     }
 
-    static toDegree(radians: number) { 
-        return (radians * 180.0) / Math.PI; 
+    static toDegree(radians: number) {
+        return (radians * 180.0) / Math.PI;
     }
-    
-    static toRadians(degree: number) { 
-        return (degree * Math.PI) / 180.0; 
+
+    static toRadians(degree: number) {
+        return (degree * Math.PI) / 180.0;
     }
 }
