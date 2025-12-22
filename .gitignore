@@ -1,5 +1,22 @@
+# Compiled output
 out
-dist
-node_modules
-.vscode-test/
 *.vsix
+
+# Dependencies
+node_modules
+
+# IDE
+.vscode-test.mjs
+.vscode-test/
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temp files
+*.tmp
+*.temp

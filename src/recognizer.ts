@@ -16,16 +16,42 @@ export interface Result {
     score: number;
 }
 
-const NumPoints = 64;
+const NumPoints = 32; // Optimizado: 32 es suficiente para precision
 const SquareSize = 250.0;
 const Origin: Point = { x: 0, y: 0 };
 const Diagonal = Math.sqrt(SquareSize * SquareSize + SquareSize * SquareSize);
 const HalfDiagonal = 0.5 * Diagonal;
 const AngleRange = 45.0;
-const AnglePrecision = 2.0;
+const AnglePrecision = 3.0; // Aumentado para menos iteraciones
 const Phi = 0.5 * (-1.0 + Math.sqrt(5.0)); // Golden Ratio
 
+// Cache para gestos normalizados
+const normalizedCache = new Map<string, Point[]>();
+
 export class DollarRecognizer {
+    /**
+     * Normalize a gesture (with caching)
+     */
+    static normalizeWithCache(points: Point[], cacheKey?: string): Point[] {
+        if (cacheKey && normalizedCache.has(cacheKey)) {
+            return normalizedCache.get(cacheKey)!;
+        }
+
+        const normalized = this.normalize(points);
+        
+        if (cacheKey) {
+            normalizedCache.set(cacheKey, normalized);
+        }
+
+        return normalized;
+    }
+
+    /**
+     * Clear cache (call when routines are modified)
+     */
+    static clearCache(): void {
+        normalizedCache.clear();
+    }
     // Recognize a gesture against a set of templates
     // templates: { name: string, points: Point[] }[]
     // candidate: Point[] (the raw input stroke)
@@ -46,15 +72,14 @@ export class DollarRecognizer {
         let bestDistance = Infinity;
         let bestTemplate = "";
 
-        // 2. Compare against all templates
-        // Note: templates input has multiple samples per command (points[][])
-        // We flatten this structure to compare against every sample of every command
+        // 2. Compare against all templates (usar cache)
         for (const templateGroup of templates) {
             const commandName = templateGroup.name;
             const samples = templateGroup.points;
 
-            for (const sampleRaw of samples) {
-                const sample = this.normalize(sampleRaw);
+            for (let i = 0; i < samples.length; i++) {
+                const cacheKey = `${commandName}_${i}`;
+                const sample = this.normalizeWithCache(samples[i], cacheKey);
 
                 // Calculate distance (Golden Section Search)
                 const distance = this.distanceAtBestAngle(candidate, sample, -AngleRange, +AngleRange, AnglePrecision);

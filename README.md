@@ -1,71 +1,182 @@
-# code-pen README
+# Code Pen - Gesture-Based Routine Automation for VS Code
 
-This is the README for your extension "code-pen". After writing up a brief description, we recommend including the following sections.
+Automatiza tus tareas repetitivas en VS Code dibujando gestos personalizados. Code Pen permite crear rutinas mediante gestos de mouse/trackpad que ejecutan secuencias de comandos predefinidos.
 
-## Features
+## 🚀 Características Principales
 
-Describe specific features of your extension including screenshots of your extension in action. Image paths are relative to this README file.
+### ✏️ Canvas de Ejecución Independiente
+- Dibuja gestos en un canvas dedicado (no interfiere con tu código)
+- Feedback visual inmediato: ✅ reconocido / ❌ no reconocido
+- Estadísticas de uso en tiempo real
+- Soporte para mouse, trackpad y touch
 
-For example if there is an image subfolder under your extension project workspace:
+### ⚙️ Configuración Intuitiva
+- Crea rutinas con bloques de comandos predefinidos
+- Arrastra para reordenar comandos
+- Configura delays entre comandos
+- Preview visual de gestos guardados
+- Test de rutinas antes de guardar
 
-\!\[feature X\]\(images/feature-x.png\)
+### 🛡️ Validación Inteligente
+- Detecta automáticamente gestos muy similares
+- Previene conflictos entre rutinas
+- Mensajes claros de error y sugerencias
+- Validación en tiempo real
 
-> Tip: Many popular extensions utilize animations. This is an excellent way to show off your extension! We recommend short, focused animations that are easy to follow.
+## 📦 Instalación
 
-## Requirements
+1. Clona el repositorio
+2. Abre en VS Code
+3. Instala dependencias: `npm install`
+4. Compila: `npm run compile`
+5. Presiona F5 para ejecutar la extensión
 
-If you have any requirements or dependencies, add a section describing those and how to install and configure them.
+## 🎯 Uso Rápido
 
-## Extension Settings
+### Crear una Rutina
 
-Include if your extension adds any VS Code settings through the `contributes.configuration` extension point.
+1. **Abre el panel de configuración**
+   - Presiona `Ctrl+Alt+C` (Mac: `Cmd+Alt+C`)
+   - O desde Command Palette: "Code Pen: Configurar Rutinas"
 
-For example:
+2. **Crea la rutina**
+   - Clic en "+ Nueva Rutina"
+   - Ingresa un nombre (ej: "Modo Focus")
+   - Selecciona bloques de comandos
+   - (Opcional) Configura delay entre comandos
+   - Presiona "Siguiente: Dibujar Gesto"
 
-This extension contributes the following settings:
+3. **Dibuja el gesto**
+   - Dibuja el mismo patrón 3 veces
+   - El sistema valida que sea único
+   - Guarda la rutina
 
-* `myExtension.enable`: Enable/disable this extension.
-* `myExtension.thing`: Set to `blah` to do something.
+### Ejecutar una Rutina
 
-## Known Issues
+1. **Abre el canvas de ejecución**
+   - Presiona `Ctrl+Alt+A` (Mac: `Cmd+Alt+A`)
+   - O desde Command Palette: "Code Pen: Ejecutar Gestos"
 
-Calling out known issues can help limit users opening duplicate issues against your extension.
+2. **Dibuja tu gesto**
+   - Dibuja el gesto asociado a tu rutina
+   - Verás feedback inmediato
+   - La rutina se ejecuta automáticamente
 
-## Release Notes
+## 🎨 Bloques de Comandos Disponibles
 
-Users appreciate release notes as you update your extension.
+### 📁 Archivos
+- Guardar / Guardar Todo
+- Formatear Documento
+- Cerrar Editor / Cerrar Todo
 
-### 1.0.0
+### 🎯 Concentración
+- Modo Zen
+- Toggle Sidebar / Panel
+- Pantalla Completa
+- Toggle Minimap
 
-Initial release of ...
+### 🎭 Apariencia
+- Cambiar Tema
+- Aumentar/Reducir/Reset Fuente
 
-### 1.0.1
+### 💻 Terminal
+- Nueva Terminal
+- Toggle Terminal
+- Limpiar Terminal
 
-Fixed issue #.
+### 🔧 Git
+- Commit / Push / Pull
+- Stash / Stash Pop
 
-### 1.1.0
+## ⌨️ Atajos de Teclado
 
-Added features X, Y, and Z.
+| Comando | Windows/Linux | Mac |
+|---------|--------------|-----|
+| Ejecutar Gestos | `Ctrl+Alt+A` | `Cmd+Alt+A` |
+| Configurar Rutinas | `Ctrl+Alt+C` | `Cmd+Alt+C` |
+
+## 🏗️ Arquitectura
+
+El proyecto está organizado en módulos independientes:
+
+```
+src/
+├── blocks.ts                       # Bloques predefinidos
+├── routineManager.ts               # Gestión de rutinas (CRUD + persistencia)
+├── gestureValidator.ts             # Validación de similitud de gestos
+├── gestureRecognitionEngine.ts     # Motor de reconocimiento y ejecución
+├── executionCanvasProvider.ts      # Canvas de ejecución (WebView)
+├── configurationWebviewProvider.ts # Panel de configuración (WebView)
+├── recognizer.ts                   # Algoritmo $1 Recognizer
+└── extension.ts                    # Punto de entrada
+```
+
+### Principios de Diseño
+- ✅ Separación de responsabilidades
+- ✅ Modularidad y bajo acoplamiento
+- ✅ Inyección de dependencias
+- ✅ Tipado fuerte con TypeScript
+- ✅ Documentación completa
+
+## 📖 Documentación Adicional
+
+- [MEJORAS_IMPLEMENTADAS.md](./MEJORAS_IMPLEMENTADAS.md) - Detalles de todas las mejoras
+- [GUIA_USO.md](./GUIA_USO.md) - Guía completa de usuario
+- [MEJORAS_TECNICAS.md](./MEJORAS_TECNICAS.md) - Documentación técnica original
+
+## 🔧 Desarrollo
+
+### Compilar
+```bash
+npm run compile
+```
+
+### Modo Watch
+```bash
+npm run watch
+```
+
+### Ejecutar Tests
+```bash
+npm run test
+```
+
+### Lint
+```bash
+npm run lint
+```
+
+## 🤝 Contribuir
+
+Las contribuciones son bienvenidas! Algunas ideas:
+
+### Nuevas Funcionalidades
+- [ ] Exportar/Importar rutinas
+- [ ] Compartir rutinas con el equipo
+- [ ] Soporte para más tipos de comandos
+- [ ] Gestos multi-touch
+- [ ] Análisis de uso y sugerencias
+
+### Mejoras
+- [ ] Tests unitarios y de integración
+- [ ] Tutoriales interactivos
+- [ ] Más bloques predefinidos
+- [ ] Temas personalizados para el canvas
+- [ ] Sincronización en la nube
+
+## 📝 Licencia
+
+[Incluye tu licencia aquí]
+
+## 🙏 Reconocimientos
+
+- Algoritmo de reconocimiento basado en [$1 Recognizer](https://depts.washington.edu/acelab/proj/dollar/index.html)
+- Inspirado en la necesidad de automatizar tareas repetitivas en VS Code
+
+## 📧 Contacto
+
+[Tu información de contacto]
 
 ---
 
-## Following extension guidelines
-
-Ensure that you've read through the extensions guidelines and follow the best practices for creating your extension.
-
-* [Extension Guidelines](https://code.visualstudio.com/api/references/extension-guidelines)
-
-## Working with Markdown
-
-You can author your README using Visual Studio Code. Here are some useful editor keyboard shortcuts:
-
-* Split the editor (`Cmd+\` on macOS or `Ctrl+\` on Windows and Linux).
-* Toggle preview (`Shift+Cmd+V` on macOS or `Shift+Ctrl+V` on Windows and Linux).
-* Press `Ctrl+Space` (Windows, Linux, macOS) to see a list of Markdown snippets.
-
-## For more information
-
-* [Visual Studio Code's Markdown Support](http://code.visualstudio.com/docs/languages/markdown)
-* [Markdown Syntax Reference](https://help.github.com/articles/markdown-basics/)
-
-**Enjoy!**
+**¡Haz tu flujo de trabajo más eficiente con gestos!** ✨

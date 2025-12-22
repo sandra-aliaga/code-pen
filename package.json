@@ -9,33 +9,39 @@
   "categories": [
     "Other"
   ],
-  "activationEvents": [
-    "onStartupFinished"
-  ],
+  "activationEvents": [],
   "main": "./out/extension.js",
   "contributes": {
     "commands": [
       {
         "command": "code-pen.helloWorld",
-        "title": "Hello World"
+        "title": "Code Pen: Hello World"
+      },
+      {
+        "command": "code-pen.openExecutionCanvas",
+        "title": "Code Pen: Ejecutar Gestos"
+      },
+      {
+        "command": "code-pen.openConfigPanel",
+        "title": "Code Pen: Configurar Rutinas"
       },
       {
         "command": "code-pen.toggleDrawing",
-        "title": "Toggle Drawing Mode"
+        "title": "Code Pen: Toggle Drawing Mode (Legacy)"
       },
       {
         "command": "code-pen.openCanvas",
-        "title": "Open Drawing Canvas"
+        "title": "Code Pen: Open Canvas (Legacy)"
       }
     ],
     "keybindings": [
       {
-        "command": "code-pen.toggleDrawing",
+        "command": "code-pen.openExecutionCanvas",
         "key": "ctrl+alt+d",
         "mac": "cmd+alt+d"
       },
       {
-        "command": "code-pen.openCanvas",
+        "command": "code-pen.openConfigPanel",
         "key": "ctrl+alt+a",
         "mac": "cmd+alt+a"
       }
