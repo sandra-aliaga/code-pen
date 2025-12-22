@@ -271,206 +271,485 @@ export class ConfigurationWebviewProvider {
 </html>`;
     }
 
-    private getStyles(): string {
-        return `<style>
-        * { box-sizing: border-box; }
-        body {
-            margin: 0;
-            padding: 16px;
-            background-color: var(--vscode-editor-background);
-            font-family: var(--vscode-font-family);
-            color: var(--vscode-editor-foreground);
-            min-height: 100vh;
-        }
-        h1 { margin: 0 0 16px 0; font-size: 1.4em; }
-        h2 { margin: 0 0 12px 0; font-size: 1.1em; opacity: 0.9; }
-        h3 { margin: 0 0 8px 0; font-size: 0.95em; opacity: 0.7; text-transform: uppercase; }
+        private getStyles(): string {
 
-        button {
-            background: var(--vscode-button-background);
-            color: var(--vscode-button-foreground);
-            border: none;
-            padding: 8px 16px;
-            cursor: pointer;
-            font-size: 13px;
-            border-radius: 4px;
-        }
-        button:hover { background: var(--vscode-button-hoverBackground); }
-        button.secondary {
-            background: var(--vscode-button-secondaryBackground);
-            color: var(--vscode-button-secondaryForeground);
-        }
-        button.danger { background: var(--vscode-inputValidation-errorBackground); border: 1px solid var(--vscode-inputValidation-errorBorder); }
-        button:disabled { opacity: 0.5; cursor: not-allowed; }
+            return `<style>
 
-        input[type="text"], input[type="number"] {
-            background: var(--vscode-input-background);
-            color: var(--vscode-input-foreground);
-            border: 1px solid var(--vscode-input-border);
-            padding: 8px 12px;
-            font-size: 13px;
-            border-radius: 4px;
-            width: 100%;
-        }
+            * { box-sizing: border-box; }
 
-        .view { display: none; }
-        .view.active { display: block; }
+            body {
 
-        .routine-list { display: flex; flex-direction: column; gap: 8px; margin-top: 16px; }
-        .routine-card {
-            background: var(--vscode-editor-inactiveSelectionBackground);
-            border: 1px solid var(--vscode-panel-border);
-            border-radius: 6px;
-            padding: 12px;
-            display: flex;
-            gap: 12px;
-            align-items: center;
-        }
-        .routine-preview {
-            width: 60px;
-            height: 60px;
-            border: 1px solid var(--vscode-panel-border);
-            border-radius: 4px;
-            background: var(--vscode-editor-background);
-            flex-shrink: 0;
-        }
-        .routine-info { flex: 1; }
-        .routine-name { font-weight: bold; margin-bottom: 4px; }
-        .routine-commands { font-size: 12px; opacity: 0.7; }
-        .routine-actions { display: flex; gap: 8px; }
-        .routine-actions button { padding: 4px 8px; font-size: 12px; }
-        .routine-card.disabled { opacity: 0.5; }
-        .routine-card.disabled .routine-preview { filter: grayscale(1); }
+                margin: 0;
 
-        .empty-state {
-            text-align: center;
-            padding: 40px;
-            opacity: 0.6;
-        }
+                padding: 16px;
 
-        .create-container { display: flex; flex-direction: column; gap: 16px; }
-        .step { display: none; }
-        .step.active { display: block; }
+                background-color: var(--vscode-editor-background);
 
-        .blocks-section { display: flex; gap: 16px; margin-top: 8px; }
-        .blocks-available { flex: 1; }
-        .blocks-selected { flex: 1; }
+                font-family: var(--vscode-font-family);
 
-        .category { margin-bottom: 16px; }
-        .blocks-grid { display: flex; flex-wrap: wrap; gap: 6px; }
+                color: var(--vscode-editor-foreground);
 
-        .block {
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            padding: 6px 10px;
-            background: var(--vscode-badge-background);
-            color: var(--vscode-badge-foreground);
-            border-radius: 4px;
-            font-size: 12px;
-            cursor: pointer;
-            user-select: none;
-            transition: transform 0.1s, box-shadow 0.1s;
-        }
-        .block:hover { transform: translateY(-1px); box-shadow: 0 2px 4px rgba(0,0,0,0.2); }
+                min-height: 100vh;
 
-        .selected-list {
-            min-height: 100px;
-            background: var(--vscode-editor-inactiveSelectionBackground);
-            border: 2px dashed var(--vscode-panel-border);
-            border-radius: 6px;
-            padding: 8px;
-            display: flex;
-            flex-direction: column;
-            gap: 4px;
-        }
-        .selected-list.empty::before {
-            content: 'Haz clic en los bloques para agregarlos aquí';
-            display: block;
-            text-align: center;
-            padding: 30px;
-            opacity: 0.5;
-            font-size: 12px;
-        }
+            }
 
-        .selected-item {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            padding: 8px;
-            background: var(--vscode-button-background);
-            color: var(--vscode-button-foreground);
-            border-radius: 4px;
-            font-size: 12px;
-        }
-        .selected-item .order {
-            background: rgba(255,255,255,0.2);
-            padding: 2px 6px;
-            border-radius: 3px;
-            font-weight: bold;
-        }
-        .selected-item .block-label { flex: 1; }
-        .selected-item .block-actions { display: flex; gap: 6px; }
-        .selected-item .move-btn, .selected-item .remove {
-            cursor: pointer;
-            opacity: 0.7;
-            padding: 2px 4px;
-        }
-        .selected-item .move-btn:hover, .selected-item .remove:hover { opacity: 1; }
+            h1 { margin: 0 0 16px 0; font-size: 1.4em; }
 
-        .canvas-container {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 16px;
-        }
-        #drawingCanvas {
-            border: 2px solid var(--vscode-panel-border);
-            border-radius: 8px;
-            cursor: crosshair;
-            background: var(--vscode-editor-background);
-        }
-        .sample-indicators {
-            display: flex;
-            gap: 12px;
-            font-size: 24px;
-        }
-        .sample-dot { opacity: 0.3; }
-        .sample-dot.done { opacity: 1; }
+            h2 { margin: 0 0 12px 0; font-size: 1.1em; opacity: 0.9; }
 
-        .validation-message {
-            display: none;
-            padding: 10px 16px;
-            border-radius: 4px;
-            font-size: 13px;
-            max-width: 400px;
-            text-align: center;
-            margin: 8px 0;
-        }
-        .validation-message.visible { display: block; }
-        .validation-message.error {
-            background: var(--vscode-inputValidation-errorBackground);
-            color: var(--vscode-inputValidation-errorForeground);
-            border: 1px solid var(--vscode-inputValidation-errorBorder);
-        }
-        .validation-message.warning {
-            background: var(--vscode-inputValidation-warningBackground);
-            color: var(--vscode-inputValidation-warningForeground);
-            border: 1px solid var(--vscode-inputValidation-warningBorder);
-        }
-        .validation-message.success {
-            background: var(--vscode-terminal-ansiGreen);
-            color: var(--vscode-editor-background);
-            border: 1px solid var(--vscode-terminal-ansiBrightGreen);
-        }
+            h3 { margin: 0 0 8px 0; font-size: 0.95em; opacity: 0.7; text-transform: uppercase; }
 
-        .nav-buttons { display: flex; gap: 8px; margin-top: 16px; }
-        .hint-text { font-size: 12px; opacity: 0.7; margin-top: 8px; }
+    
 
-        .form-row { display: flex; gap: 16px; }
-        .form-field { flex: 1; }
-        .form-field-small { flex: 0 0 100px; }
-    </style>`;
+            button {
+
+                background: var(--vscode-button-background);
+
+                color: var(--vscode-button-foreground);
+
+                border: none;
+
+                padding: 8px 16px;
+
+                cursor: pointer;
+
+                font-size: 13px;
+
+                border-radius: 4px;
+
+            }
+
+            button:hover { background: var(--vscode-button-hoverBackground); }
+
+            button.secondary {
+
+                background: var(--vscode-button-secondaryBackground);
+
+                color: var(--vscode-button-secondaryForeground);
+
+            }
+
+            button.danger { background: var(--vscode-inputValidation-errorBackground); border: 1px solid var(--vscode-inputValidation-errorBorder); }
+
+            button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    
+
+            input[type="text"], input[type="number"] {
+
+                background: var(--vscode-input-background);
+
+                color: var(--vscode-input-foreground);
+
+                border: 1px solid var(--vscode-input-border);
+
+                padding: 8px 12px;
+
+                font-size: 13px;
+
+                border-radius: 4px;
+
+                width: 100%;
+
+            }
+
+    
+
+            .view { display: none; }
+
+            .view.active { display: block; }
+
+    
+
+            .routine-list { display: flex; flex-direction: column; gap: 8px; margin-top: 16px; }
+
+            .routine-card {
+
+                background: var(--vscode-editor-inactiveSelectionBackground);
+
+                border: 1px solid var(--vscode-panel-border);
+
+                border-radius: 6px;
+
+                padding: 12px;
+
+                display: flex;
+
+                gap: 12px;
+
+                align-items: center;
+
+                flex-wrap: wrap; /* Allow wrapping for responsiveness */
+
+            }
+
+            .routine-preview {
+
+                width: 60px;
+
+                height: 60px;
+
+                border: 1px solid var(--vscode-panel-border);
+
+                border-radius: 4px;
+
+                background: var(--vscode-editor-background);
+
+                flex-shrink: 0;
+
+            }
+
+            .routine-info { flex: 1; min-width: 200px; } /* Ensure it takes space but wraps if needed */
+
+            .routine-name { font-weight: bold; margin-bottom: 4px; }
+
+            .routine-commands { font-size: 12px; opacity: 0.7; }
+
+            .routine-actions { display: flex; gap: 8px; margin-left: auto; } /* Push to right, but wrap if needed */
+
+            .routine-actions button { padding: 4px 8px; font-size: 12px; }
+
+            .routine-card.disabled { opacity: 0.5; }
+
+            .routine-card.disabled .routine-preview { filter: grayscale(1); }
+
+    
+
+            .empty-state {
+
+                text-align: center;
+
+                padding: 40px;
+
+                opacity: 0.6;
+
+            }
+
+    
+
+            .create-container { display: flex; flex-direction: column; gap: 16px; }
+
+            .step { display: none; }
+
+            .step.active { display: block; }
+
+    
+
+            .blocks-section { display: flex; gap: 16px; margin-top: 8px; }
+
+            .blocks-available { flex: 1; min-width: 0; /* Prevent overflow */ }
+
+            .blocks-selected { flex: 1; min-width: 0; /* Prevent overflow */ }
+
+    
+
+            .category { margin-bottom: 16px; }
+
+            .blocks-grid { display: flex; flex-wrap: wrap; gap: 6px; }
+
+    
+
+            .block {
+
+                display: inline-flex;
+
+                align-items: center;
+
+                gap: 6px;
+
+                padding: 6px 10px;
+
+                background: var(--vscode-badge-background);
+
+                color: var(--vscode-badge-foreground);
+
+                border-radius: 4px;
+
+                font-size: 12px;
+
+                cursor: pointer;
+
+                user-select: none;
+
+                transition: transform 0.1s, box-shadow 0.1s;
+
+            }
+
+            .block:hover { transform: translateY(-1px); box-shadow: 0 2px 4px rgba(0,0,0,0.2); }
+
+    
+
+            .selected-list {
+
+                min-height: 100px;
+
+                background: var(--vscode-editor-inactiveSelectionBackground);
+
+                border: 2px dashed var(--vscode-panel-border);
+
+                border-radius: 6px;
+
+                padding: 8px;
+
+                display: flex;
+
+                flex-direction: column;
+
+                gap: 4px;
+
+            }
+
+            .selected-list.empty::before {
+
+                content: 'Haz clic en los bloques para agregarlos aquí';
+
+                display: block;
+
+                text-align: center;
+
+                padding: 30px;
+
+                opacity: 0.5;
+
+                font-size: 12px;
+
+            }
+
+    
+
+            .selected-item {
+
+                display: flex;
+
+                align-items: center;
+
+                gap: 8px;
+
+                padding: 8px;
+
+                background: var(--vscode-button-background);
+
+                color: var(--vscode-button-foreground);
+
+                border-radius: 4px;
+
+                font-size: 12px;
+
+            }
+
+            .selected-item .order {
+
+                background: rgba(255,255,255,0.2);
+
+                padding: 2px 6px;
+
+                border-radius: 3px;
+
+                font-weight: bold;
+
+            }
+
+            .selected-item .block-label { flex: 1; word-break: break-all; } /* Break long words */
+
+            .selected-item .block-actions { display: flex; gap: 6px; }
+
+            .selected-item .move-btn, .selected-item .remove {
+
+                cursor: pointer;
+
+                opacity: 0.7;
+
+                padding: 2px 4px;
+
+            }
+
+            .selected-item .move-btn:hover, .selected-item .remove:hover { opacity: 1; }
+
+    
+
+            .canvas-container {
+
+                display: flex;
+
+                flex-direction: column;
+
+                align-items: center;
+
+                gap: 16px;
+
+                width: 100%;
+
+            }
+
+            #drawingCanvas {
+
+                border: 2px solid var(--vscode-panel-border);
+
+                border-radius: 8px;
+
+                cursor: crosshair;
+
+                background: var(--vscode-editor-background);
+
+                max-width: 100%; /* Responsive canvas */
+
+                height: auto;
+
+            }
+
+            .sample-indicators {
+
+                display: flex;
+
+                gap: 12px;
+
+                font-size: 24px;
+
+            }
+
+            .sample-dot { opacity: 0.3; }
+
+            .sample-dot.done { opacity: 1; }
+
+    
+
+            .validation-message {
+
+                display: none;
+
+                padding: 10px 16px;
+
+                border-radius: 4px;
+
+                font-size: 13px;
+
+                max-width: 400px;
+
+                width: 100%;
+
+                text-align: center;
+
+                margin: 8px 0;
+
+            }
+
+            .validation-message.visible { display: block; }
+
+            .validation-message.error {
+
+                background: var(--vscode-inputValidation-errorBackground);
+
+                color: var(--vscode-inputValidation-errorForeground);
+
+                border: 1px solid var(--vscode-inputValidation-errorBorder);
+
+            }
+
+            .validation-message.warning {
+
+                background: var(--vscode-inputValidation-warningBackground);
+
+                color: var(--vscode-inputValidation-warningForeground);
+
+                border: 1px solid var(--vscode-inputValidation-warningBorder);
+
+            }
+
+            .validation-message.success {
+
+                background: var(--vscode-terminal-ansiGreen);
+
+                color: var(--vscode-editor-background);
+
+                border: 1px solid var(--vscode-terminal-ansiBrightGreen);
+
+            }
+
+    
+
+            .nav-buttons { display: flex; gap: 8px; margin-top: 16px; flex-wrap: wrap; }
+
+            .hint-text { font-size: 12px; opacity: 0.7; margin-top: 8px; }
+
+    
+
+            .form-row { display: flex; gap: 16px; }
+
+            .form-field { flex: 1; }
+
+            .form-field-small { flex: 0 0 100px; }
+
+    
+
+            /* Mobile/Responsive Adjustments */
+
+            @media (max-width: 600px) {
+
+                .blocks-section {
+
+                    flex-direction: column;
+
+                }
+
+                
+
+                .form-row {
+
+                    flex-direction: column;
+
+                    gap: 8px;
+
+                }
+
+                
+
+                .form-field-small {
+
+                    flex: auto;
+
+                    width: 100%;
+
+                }
+
+    
+
+                .routine-actions {
+
+                    width: 100%;
+
+                    justify-content: flex-end;
+
+                    margin-top: 8px;
+
+                }
+
+                
+
+                .nav-buttons {
+
+                    flex-direction: column;
+
+                }
+
+                
+
+                .nav-buttons button {
+
+                    width: 100%;
+
+                }
+
+    
+
+                #drawingCanvas {
+
+                    width: 100%;
+
+                }
+
+            }
+
+        </style>`;
     }
 
     private getBodyHTML(): string {

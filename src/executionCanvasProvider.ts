@@ -10,6 +10,7 @@ import { GestureRecognitionEngine } from './gestureRecognitionEngine';
 export class ExecutionCanvasProvider {
     private panel: vscode.WebviewPanel | undefined;
     private recognitionEngine: GestureRecognitionEngine;
+    private lastActiveEditor: vscode.TextEditor | undefined;
 
     constructor(
         private context: vscode.ExtensionContext,
@@ -19,6 +20,9 @@ export class ExecutionCanvasProvider {
     }
 
     show(): void {
+        // Guardar el editor activo ANTES de abrir el canvas
+        this.lastActiveEditor = vscode.window.activeTextEditor;
+
         // Always create new panel, dispose old if exists
         if (this.panel) {
             this.panel.dispose();
@@ -49,7 +53,7 @@ export class ExecutionCanvasProvider {
     }
 
     private async handleRecognition(points: Point[]): Promise<void> {
-        const result = await this.recognitionEngine.recognizeAndExecute(points);
+        const result = await this.recognitionEngine.recognizeAndExecute(points, this.lastActiveEditor);
 
         // Send result back to webview (no popup, solo feedback en canvas)
         if (this.panel) {
@@ -167,6 +171,8 @@ export class ExecutionCanvasProvider {
         let points = [];
         let gestureCount = 0;
         let recognizedCount = 0;
+        let isProcessing = false; // Debounce: evitar múltiples reconocimientos simultáneos
+        const MAX_POINTS = 500; // Limitar puntos para evitar lag
 
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
@@ -195,6 +201,9 @@ export class ExecutionCanvasProvider {
 
         function draw(e) {
             if (!isDrawing) return;
+            // Limitar puntos para evitar lag con gestos muy largos
+            if (points.length >= MAX_POINTS) return;
+
             const rect = canvas.getBoundingClientRect();
             const x = e.clientX - rect.left;
             const y = e.clientY - rect.top;
@@ -212,9 +221,18 @@ export class ExecutionCanvasProvider {
             ctx.beginPath();
 
             if (points.length > 5) {
+                // Debounce: evitar enviar si ya hay un reconocimiento en proceso
+                if (isProcessing) {
+                    showFeedback('Procesando...', 'failure');
+                    points = [];
+                    setTimeout(() => ctx.clearRect(0, 0, canvas.width, canvas.height), 300);
+                    return;
+                }
+
+                isProcessing = true;
                 gestureCount++;
                 gestureCountEl.textContent = gestureCount;
-                
+
                 vscode.postMessage({
                     command: 'recognizeGesture',
                     points: points
@@ -238,6 +256,7 @@ export class ExecutionCanvasProvider {
         window.addEventListener('message', event => {
             const message = event.data;
             if (message.command === 'recognitionResult') {
+                isProcessing = false; // Permitir nuevo reconocimiento
                 const score = Math.round(message.score * 100);
                 if (message.recognized) {
                     recognizedCount++;
@@ -245,7 +264,7 @@ export class ExecutionCanvasProvider {
                     showFeedback('[OK] ' + message.routineName + ' (' + score + '%)', 'success');
                     setTimeout(() => feedback.classList.remove('visible'), 2000);
                 } else {
-                    const text = message.routineName 
+                    const text = message.routineName
                         ? '[X] No reconocido (mejor: ' + message.routineName + ' ' + score + '%)'
                         : '[X] No reconocido';
                     showFeedback(text, 'failure');

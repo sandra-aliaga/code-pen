@@ -95,8 +95,10 @@ export class GestureRecognitionEngine {
 
     /**
      * Execute a routine (run all its commands in sequence)
+     * @param routine - The routine to execute
+     * @param targetEditor - Optional editor to focus before executing commands
      */
-    async executeRoutine(routine: Routine): Promise<{ success: number; failed: number }> {
+    async executeRoutine(routine: Routine, targetEditor?: vscode.TextEditor): Promise<{ success: number; failed: number }> {
         const delay = routine.delay || 0;
         let successCount = 0;
         let failCount = 0;
@@ -104,6 +106,16 @@ export class GestureRecognitionEngine {
         this.outputChannel.appendLine(`[Execution] Starting routine "${routine.name}"`);
         this.outputChannel.appendLine(`  Commands: ${routine.commands.join(' -> ')}`);
         this.outputChannel.appendLine(`  Delay: ${delay}ms`);
+
+        // Restaurar foco al editor original antes de ejecutar comandos
+        if (targetEditor && !targetEditor.document.isClosed) {
+            try {
+                await vscode.window.showTextDocument(targetEditor.document, targetEditor.viewColumn);
+                this.outputChannel.appendLine(`  [Focus] Restored to: ${targetEditor.document.fileName}`);
+            } catch {
+                this.outputChannel.appendLine(`  [Focus] Could not restore editor focus`);
+            }
+        }
 
         for (let i = 0; i < routine.commands.length; i++) {
             const cmd = routine.commands[i];
@@ -135,17 +147,19 @@ export class GestureRecognitionEngine {
 
     /**
      * Recognize and execute a gesture in one call (async)
+     * @param points - The gesture points
+     * @param targetEditor - Optional editor to focus before executing commands
      */
-    async recognizeAndExecute(points: Point[]): Promise<RecognitionResult> {
+    async recognizeAndExecute(points: Point[], targetEditor?: vscode.TextEditor): Promise<RecognitionResult> {
         const result = await this.recognizeAsync(points);
 
         if (result.recognized && result.routine) {
             const scorePercent = Math.round(result.score * 100);
-            
+
             // Log only, no popup spam
             this.outputChannel.appendLine(`[Execute] Running "${result.routineName}" (${scorePercent}%)`);
 
-            const execResult = await this.executeRoutine(result.routine);
+            const execResult = await this.executeRoutine(result.routine, targetEditor);
 
             if (execResult.failed > 0) {
                 this.outputChannel.appendLine(`[Execute] Completed with ${execResult.failed} error(es)`);

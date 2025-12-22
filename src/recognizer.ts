@@ -111,28 +111,34 @@ export class DollarRecognizer {
         let D = 0.0;
         const newPoints: Point[] = [points[0]];
 
-        // Clone points to avoid modifying original
-        const srcPts = [...points];
+        // Optimizado: evitar splice usando un punto previo mutable
+        let prevPoint = points[0];
 
-        let i = 1;
-        while (i < srcPts.length) {
-            const d = this.distance(srcPts[i - 1], srcPts[i]);
-            if (D + d >= I) {
-                const qx = srcPts[i - 1].x + ((I - D) / d) * (srcPts[i].x - srcPts[i - 1].x);
-                const qy = srcPts[i - 1].y + ((I - D) / d) * (srcPts[i].y - srcPts[i - 1].y);
-                const q = { x: qx, y: qy };
+        for (let i = 1; i < points.length && newPoints.length < n; i++) {
+            const currPoint = points[i];
+            let d = this.distance(prevPoint, currPoint);
+
+            while (D + d >= I && newPoints.length < n) {
+                const t = (I - D) / d;
+                const q: Point = {
+                    x: prevPoint.x + t * (currPoint.x - prevPoint.x),
+                    y: prevPoint.y + t * (currPoint.y - prevPoint.y)
+                };
                 newPoints.push(q);
-                srcPts.splice(i, 0, q); // Insert 'q' at position i so that it effectively becomes the next p[i-1]
+                prevPoint = q;
+                d = this.distance(prevPoint, currPoint);
                 D = 0.0;
-            } else {
-                D += d;
-                i++;
             }
+
+            D += d;
+            prevPoint = currPoint;
         }
 
-        if (newPoints.length === n - 1) {
-            newPoints.push(srcPts[srcPts.length - 1]);
+        // Asegurar que tengamos exactamente n puntos
+        while (newPoints.length < n) {
+            newPoints.push(points[points.length - 1]);
         }
+
         return newPoints;
     }
 
