@@ -497,6 +497,23 @@ export class ConfigurationWebviewProvider {
                     </div>
                 </div>
 
+                <!-- Custom Command Input -->
+                <div style="margin-bottom: 20px; padding: 15px; background: var(--vscode-editor-background); border-radius: 4px; border: 1px solid var(--vscode-input-border);">
+                    <h3 style="margin-top: 0; margin-bottom: 10px;">[+] Comando Personalizado</h3>
+                    <div style="display: flex; gap: 10px; align-items: center;">
+                        <input 
+                            type="text" 
+                            id="customCommandInput" 
+                            placeholder="Ejemplo: workbench.action.quickOpen"
+                            style="flex: 1; padding: 8px; background: var(--vscode-input-background); color: var(--vscode-input-foreground); border: 1px solid var(--vscode-input-border); border-radius: 3px;"
+                        />
+                        <button id="btnAddCustomCommand" style="padding: 8px 16px; cursor: pointer; background: #0e639c; color: white; border: none; border-radius: 3px;">Agregar</button>
+                    </div>
+                    <div style="margin-top: 8px; font-size: 0.9em; opacity: 0.7;">
+                        Agrega cualquier comando de VS Code. Usa Ctrl+Shift+P para ver todos.
+                    </div>
+                </div>
+
                 <div class="blocks-section">
                     <div class="blocks-available">
                         <h2>Bloques Disponibles</h2>
@@ -623,6 +640,34 @@ export class ConfigurationWebviewProvider {
         });
 
         routineNameInput.addEventListener('input', validateStep1);
+
+        // Custom command input
+        const customCommandInput = document.getElementById('customCommandInput');
+        const btnAddCustomCommand = document.getElementById('btnAddCustomCommand');
+
+        function addCustomCommand() {
+            const cmd = customCommandInput.value.trim();
+            if (cmd) {
+                const customBlock = {
+                    id: 'custom-' + Date.now(),
+                    label: '[Custom] ' + cmd,
+                    icon: '',
+                    command: cmd,
+                    category: 'files'
+                };
+                selectedCommands.push(customBlock);
+                renderSelectedBlocks();
+                validateStep1();
+                customCommandInput.value = '';
+            }
+        }
+
+        btnAddCustomCommand.addEventListener('click', addCustomCommand);
+        customCommandInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                addCustomCommand();
+            }
+        });
 
         window.addEventListener('message', event => {
             const message = event.data;
