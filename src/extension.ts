@@ -55,6 +55,8 @@ interface Routine {
 	name: string;
 	commands: string[];  // Array of command IDs to execute in sequence
 	samples: { x: number; y: number }[][];  // Gesture samples for recognition
+	enabled?: boolean;  // Whether this routine is active (default true)
+	delay?: number;  // Delay in ms between commands (default 0)
 }
 
 // Store for routines: RoutineName -> Routine
@@ -176,7 +178,8 @@ export function activate(context: vscode.ExtensionContext) {
 						const routine: Routine = {
 							name: message.name,
 							commands: message.commands,
-							samples: message.samples
+							samples: message.samples,
+							delay: message.delay || 0
 						};
 						routineStore[message.name] = routine;
 						// Persist to global state
@@ -199,6 +202,83 @@ export function activate(context: vscode.ExtensionContext) {
 							command: 'routinesUpdated',
 							routines: routineStore
 						});
+						return;
+
+					case 'toggleRoutine':
+						if (routineStore[message.name]) {
+							routineStore[message.name].enabled = !routineStore[message.name].enabled;
+							if (routineStore[message.name].enabled === undefined) {
+								routineStore[message.name].enabled = false;
+							}
+							context.globalState.update('codePen.routines', routineStore);
+							panel.webview.postMessage({
+								command: 'routinesUpdated',
+								routines: routineStore
+							});
+						}
+						return;
+
+					case 'validateGesture':
+						// Check if the drawn gesture is too similar to an existing one
+						const templates = Object.keys(routineStore).map(routineName => {
+							return {
+								name: routineName,
+								points: routineStore[routineName].samples
+							};
+						});
+
+						if (templates.length > 0) {
+							const result = DollarRecognizer.recognize(message.points, templates);
+							const isTooSimilar = result.score > 0.75;
+
+							panel.webview.postMessage({
+								command: 'gestureValidation',
+								requestId: message.requestId,
+								isTooSimilar: isTooSimilar,
+								similarTo: isTooSimilar ? result.name : null,
+								score: result.score
+							});
+						} else {
+							// No existing gestures, always valid
+							panel.webview.postMessage({
+								command: 'gestureValidation',
+								requestId: message.requestId,
+								isTooSimilar: false,
+								similarTo: null,
+								score: 0
+							});
+						}
+						return;
+
+					case 'testRoutine':
+						// Execute test routine
+						const testDelay = message.delay || 0;
+						vscode.window.showInformationMessage(`Probando rutina...${testDelay > 0 ? ` (delay: ${testDelay}ms)` : ''}`);
+						outputChannel.appendLine(`TESTING ROUTINE: ${message.commands.join(' -> ')} (delay: ${testDelay}ms)`);
+						(async () => {
+							let successCount = 0;
+							let failCount = 0;
+							for (let i = 0; i < message.commands.length; i++) {
+								const cmd = message.commands[i];
+								if (i > 0 && testDelay > 0) {
+									await new Promise(resolve => setTimeout(resolve, testDelay));
+								}
+								outputChannel.appendLine(`  -> Executing: ${cmd}`);
+								try {
+									await vscode.commands.executeCommand(cmd);
+									successCount++;
+								} catch (err) {
+									failCount++;
+									outputChannel.appendLine(`  -> Error: ${err}`);
+									vscode.window.showWarningMessage(`Error en comando: ${cmd}`);
+								}
+							}
+							if (failCount === 0) {
+								vscode.window.showInformationMessage(`Prueba completada: ${successCount} comandos OK`);
+							} else {
+								vscode.window.showWarningMessage(`Prueba completada con ${failCount} error(es)`);
+							}
+						})();
 						return;
 
 					case 'stroke':
@@ -246,41 +326,57 @@ export function activate(context: vscode.ExtensionContext) {
 					return { x: s.active.character, y: s.active.line };
 				});
 
-				// 2. Prepare templates from routineStore
-				const templates = Object.keys(routineStore).map(routineName => {
-					return {
-						name: routineName,
-						points: routineStore[routineName].samples // This is Point[][] (array of samples)
-					};
-				});
+				// 2. Prepare templates from routineStore (only enabled routines)
+				const templates = Object.keys(routineStore)
+					.filter(routineName => routineStore[routineName].enabled !== false)
+					.map(routineName => {
+						return {
+							name: routineName,
+							points: routineStore[routineName].samples // This is Point[][] (array of samples)
+						};
+					});
 
 				// 3. Recognize
 				if (templates.length > 0) {
 					const result = DollarRecognizer.recognize(candidatePoints, templates);
-					outputChannel.appendLine(`RECOGNITION RESULT: ${result.name} (Score: ${result.score.toFixed(2)})`);
+					const scorePercent = Math.round(result.score * 100);
+					outputChannel.appendLine(`RECOGNITION RESULT: ${result.name} (Score: ${scorePercent}%)`);
 
 					if (result.score > 0.80) {
 						const routine = routineStore[result.name];
-						vscode.window.showInformationMessage(`Rutina detectada: "${result.name}"`);
-						outputChannel.appendLine(`Executing routine: ${routine.commands.join(' -> ')}`);
+						const routineDelay = routine.delay || 0;
+						vscode.window.showInformationMessage(`Rutina "${result.name}" (${scorePercent}% match)`);
+						outputChannel.appendLine(`Executing routine: ${routine.commands.join(' -> ')} (delay: ${routineDelay}ms)`);
 
 						// Execute all commands in sequence
 						(async () => {
-							for (const cmd of routine.commands) {
+							let successCount = 0;
+							let failCount = 0;
+							for (let i = 0; i < routine.commands.length; i++) {
+								const cmd = routine.commands[i];
+								if (i > 0 && routineDelay > 0) {
+									await new Promise(resolve => setTimeout(resolve, routineDelay));
+								}
 								outputChannel.appendLine(`  -> Executing: ${cmd}`);
 								try {
 									await vscode.commands.executeCommand(cmd);
+									successCount++;
 								} catch (err) {
-									outputChannel.appendLine(`  -> Error executing ${cmd}: ${err}`);
+									failCount++;
+									outputChannel.appendLine(`  -> Error: ${err}`);
+									vscode.window.showWarningMessage(`Error en comando: ${cmd}`);
 								}
 							}
-							outputChannel.appendLine(`Routine "${result.name}" completed.`);
+							if (failCount > 0) {
+								vscode.window.showWarningMessage(`Rutina completada con ${failCount} error(es)`);
+							}
+							outputChannel.appendLine(`Routine "${result.name}" completed. Success: ${successCount}, Failed: ${failCount}`);
 						})();
 					} else {
-						vscode.window.setStatusBarMessage(`Gesto no reconocido (Score: ${result.score.toFixed(2)})`, 3000);
+						vscode.window.setStatusBarMessage(`Gesto no reconocido (${scorePercent}% - necesita >80%)`, 3000);
 					}
 				} else {
-					outputChannel.appendLine("No routines recorded yet.");
+					vscode.window.setStatusBarMessage('No hay rutinas activas', 2000);
 				}
 			}
 
@@ -348,7 +444,7 @@ function getWebviewContent(blocks: Block[], routines: Record<string, Routine>) {
             background: var(--vscode-button-secondaryBackground);
             color: var(--vscode-button-secondaryForeground);
         }
-        button.danger { background: #c53030; }
+        button.danger { background: var(--vscode-inputValidation-errorBackground); border: 1px solid var(--vscode-inputValidation-errorBorder); }
         button:disabled { opacity: 0.5; cursor: not-allowed; }
 
         input[type="text"] {
@@ -373,14 +469,24 @@ function getWebviewContent(blocks: Block[], routines: Record<string, Routine>) {
             border-radius: 6px;
             padding: 12px;
             display: flex;
-            justify-content: space-between;
+            gap: 12px;
             align-items: center;
+        }
+        .routine-preview {
+            width: 60px;
+            height: 60px;
+            border: 1px solid var(--vscode-panel-border);
+            border-radius: 4px;
+            background: var(--vscode-editor-background);
+            flex-shrink: 0;
         }
         .routine-info { flex: 1; }
         .routine-name { font-weight: bold; margin-bottom: 4px; }
         .routine-commands { font-size: 12px; opacity: 0.7; }
         .routine-actions { display: flex; gap: 8px; }
         .routine-actions button { padding: 4px 8px; font-size: 12px; }
+        .routine-card.disabled { opacity: 0.5; }
+        .routine-card.disabled .routine-preview { filter: grayscale(1); }
 
         .empty-state {
             text-align: center;
@@ -451,12 +557,14 @@ function getWebviewContent(blocks: Block[], routines: Record<string, Routine>) {
             border-radius: 3px;
             font-weight: bold;
         }
-        .selected-item .remove {
-            margin-left: auto;
+        .selected-item .block-label { flex: 1; }
+        .selected-item .block-actions { display: flex; gap: 6px; }
+        .selected-item .move-btn, .selected-item .remove {
             cursor: pointer;
             opacity: 0.7;
+            padding: 2px 4px;
         }
-        .selected-item .remove:hover { opacity: 1; }
+        .selected-item .move-btn:hover, .selected-item .remove:hover { opacity: 1; }
 
         /* Canvas View */
         .canvas-container {
@@ -479,7 +587,34 @@ function getWebviewContent(blocks: Block[], routines: Record<string, Routine>) {
         .sample-dot { opacity: 0.3; }
         .sample-dot.done { opacity: 1; }
 
+        .warning-message {
+            display: none;
+            background: var(--vscode-inputValidation-errorBackground);
+            color: var(--vscode-inputValidation-errorForeground, var(--vscode-editor-foreground));
+            border: 1px solid var(--vscode-inputValidation-errorBorder);
+            padding: 10px 16px;
+            border-radius: 4px;
+            font-size: 13px;
+            max-width: 400px;
+            text-align: center;
+        }
+        .warning-message.visible { display: block; }
+
         .nav-buttons { display: flex; gap: 8px; margin-top: 16px; }
+        .hint-text { font-size: 12px; opacity: 0.7; margin-top: 8px; }
+
+        .form-row { display: flex; gap: 16px; }
+        .form-field { flex: 1; }
+        .form-field-small { flex: 0 0 100px; }
+        input[type="number"] {
+            background: var(--vscode-input-background);
+            color: var(--vscode-input-foreground);
+            border: 1px solid var(--vscode-input-border);
+            padding: 8px 12px;
+            font-size: 13px;
+            border-radius: 4px;
+            width: 100%;
+        }
     </style>
 </head>
 <body>
@@ -497,9 +632,15 @@ function getWebviewContent(blocks: Block[], routines: Record<string, Routine>) {
         <!-- Step 1: Name and Commands -->
         <div id="step1" class="step active">
             <div class="create-container">
-                <div>
-                    <h3>Nombre de la Rutina</h3>
-                    <input type="text" id="routineName" placeholder="Ej: Modo Focus, Deploy Rapido...">
+                <div class="form-row">
+                    <div class="form-field">
+                        <h3>Nombre de la Rutina</h3>
+                        <input type="text" id="routineName" placeholder="Ej: Modo Focus, Deploy Rapido...">
+                    </div>
+                    <div class="form-field form-field-small">
+                        <h3>Delay (ms)</h3>
+                        <input type="number" id="routineDelay" value="0" min="0" max="5000" step="100" placeholder="0">
+                    </div>
                 </div>
 
                 <div class="blocks-section">
@@ -515,8 +656,10 @@ function getWebviewContent(blocks: Block[], routines: Record<string, Routine>) {
 
                 <div class="nav-buttons">
                     <button class="secondary" id="btnCancelCreate">Cancelar</button>
+                    <button class="secondary" id="btnTestRoutine" disabled>Probar</button>
                     <button id="btnNextStep" disabled>Siguiente: Dibujar Gesto</button>
                 </div>
+                <div id="step1Hint" class="hint-text"></div>
             </div>
         </div>
 
@@ -533,6 +676,8 @@ function getWebviewContent(blocks: Block[], routines: Record<string, Routine>) {
                 </div>
 
                 <canvas id="drawingCanvas" width="400" height="300"></canvas>
+
+                <div id="warningMessage" class="warning-message"></div>
 
                 <div class="nav-buttons">
                     <button class="secondary" id="btnBackStep">Atras</button>
@@ -553,6 +698,7 @@ function getWebviewContent(blocks: Block[], routines: Record<string, Routine>) {
         let selectedCommands = [];
         let recordedSamples = [];
         const REQUIRED_SAMPLES = 3;
+        let editingRoutineName = null; // If editing, stores original name
 
         // DOM Elements
         const mainView = document.getElementById('mainView');
@@ -563,15 +709,26 @@ function getWebviewContent(blocks: Block[], routines: Record<string, Routine>) {
         const blocksContainer = document.getElementById('blocksContainer');
         const selectedBlocksEl = document.getElementById('selectedBlocks');
         const routineNameInput = document.getElementById('routineName');
+        const routineDelayInput = document.getElementById('routineDelay');
         const btnNextStep = document.getElementById('btnNextStep');
+        const btnTestRoutine = document.getElementById('btnTestRoutine');
         const btnSaveRoutine = document.getElementById('btnSaveRoutine');
         const gestureRoutineName = document.getElementById('gestureRoutineName');
+        const step1Hint = document.getElementById('step1Hint');
 
         // Canvas
         const canvas = document.getElementById('drawingCanvas');
         const ctx = canvas.getContext('2d');
+        const warningMessage = document.getElementById('warningMessage');
         let painting = false;
         let points = [];
+        let pendingValidation = null; // Store points waiting for validation
+        let validationRequestId = 0;
+
+        // Helper to get theme color
+        function getThemeColor(varName, fallback) {
+            return getComputedStyle(document.documentElement).getPropertyValue(varName).trim() || fallback;
+        }
 
         // Initialize
         renderBlocks();
@@ -604,9 +761,18 @@ function getWebviewContent(blocks: Block[], routines: Record<string, Routine>) {
                 command: 'saveRoutine',
                 name: routineNameInput.value,
                 commands: selectedCommands.map(b => b.command),
-                samples: recordedSamples
+                samples: recordedSamples,
+                delay: parseInt(routineDelayInput.value) || 0
             });
             showView('main');
+        });
+
+        btnTestRoutine.addEventListener('click', () => {
+            vscode.postMessage({
+                command: 'testRoutine',
+                commands: selectedCommands.map(b => b.command),
+                delay: parseInt(routineDelayInput.value) || 0
+            });
         });
 
         routineNameInput.addEventListener('input', validateStep1);
@@ -617,8 +783,34 @@ function getWebviewContent(blocks: Block[], routines: Record<string, Routine>) {
             if (message.command === 'routinesUpdated') {
                 routines = message.routines;
                 renderRoutineList();
+            } else if (message.command === 'gestureValidation') {
+                handleGestureValidation(message);
             }
         });
+
+        function handleGestureValidation(message) {
+            if (message.isTooSimilar) {
+                // Show warning
+                warningMessage.textContent = 'Este gesto es muy similar a "' + message.similarTo + '". Dibuja otro diferente.';
+                warningMessage.classList.add('visible');
+                // Hide after 3 seconds
+                setTimeout(() => {
+                    warningMessage.classList.remove('visible');
+                }, 3000);
+            } else {
+                // Gesture is valid, add it
+                warningMessage.classList.remove('visible');
+                if (pendingValidation) {
+                    recordedSamples.push(pendingValidation);
+                    updateSampleDots();
+
+                    if (recordedSamples.length >= REQUIRED_SAMPLES) {
+                        btnSaveRoutine.disabled = false;
+                    }
+                }
+            }
+            pendingValidation = null;
+        }
 
         // Functions
         function showView(view) {
@@ -633,8 +825,11 @@ function getWebviewContent(blocks: Block[], routines: Record<string, Routine>) {
 
         function resetCreateForm() {
             routineNameInput.value = '';
+            routineDelayInput.value = '0';
             selectedCommands = [];
             recordedSamples = [];
+            editingRoutineName = null;
+            btnSaveRoutine.disabled = true;
             renderSelectedBlocks();
             validateStep1();
             showStep(1);
@@ -687,10 +882,28 @@ function getWebviewContent(blocks: Block[], routines: Record<string, Routine>) {
                 selectedBlocksEl.innerHTML = selectedCommands.map((block, i) =>
                     '<div class="selected-item">' +
                     '<span class="order">' + (i + 1) + '</span>' +
-                    '<span>' + block.label + '</span>' +
+                    '<span class="block-label">' + block.label + '</span>' +
+                    '<span class="block-actions">' +
+                    '<span class="move-btn" data-dir="up" data-index="' + i + '"' + (i === 0 ? ' style="visibility:hidden"' : '') + '>^</span>' +
+                    '<span class="move-btn" data-dir="down" data-index="' + i + '"' + (i === selectedCommands.length - 1 ? ' style="visibility:hidden"' : '') + '>v</span>' +
                     '<span class="remove" data-index="' + i + '">x</span>' +
+                    '</span>' +
                     '</div>'
                 ).join('');
+
+                // Add move handlers
+                selectedBlocksEl.querySelectorAll('.move-btn').forEach(el => {
+                    el.addEventListener('click', () => {
+                        const idx = parseInt(el.dataset.index);
+                        const dir = el.dataset.dir;
+                        if (dir === 'up' && idx > 0) {
+                            [selectedCommands[idx], selectedCommands[idx - 1]] = [selectedCommands[idx - 1], selectedCommands[idx]];
+                        } else if (dir === 'down' && idx < selectedCommands.length - 1) {
+                            [selectedCommands[idx], selectedCommands[idx + 1]] = [selectedCommands[idx + 1], selectedCommands[idx]];
+                        }
+                        renderSelectedBlocks();
+                    });
+                });
 
                 // Add remove handlers
                 selectedBlocksEl.querySelectorAll('.remove').forEach(el => {
@@ -704,9 +917,26 @@ function getWebviewContent(blocks: Block[], routines: Record<string, Routine>) {
         }
 
         function validateStep1() {
-            const hasName = routineNameInput.value.trim().length > 0;
+            const name = routineNameInput.value.trim();
+            const hasName = name.length > 0;
             const hasCommands = selectedCommands.length > 0;
-            btnNextStep.disabled = !(hasName && hasCommands);
+            const isDuplicate = hasName && routines[name] && name !== editingRoutineName;
+
+            btnNextStep.disabled = !(hasName && hasCommands && !isDuplicate);
+            btnTestRoutine.disabled = !hasCommands;
+
+            // Update hint text
+            if (!hasName && !hasCommands) {
+                step1Hint.textContent = 'Ingresa un nombre y selecciona al menos un bloque';
+            } else if (!hasName) {
+                step1Hint.textContent = 'Ingresa un nombre para la rutina';
+            } else if (isDuplicate) {
+                step1Hint.textContent = 'Ya existe una rutina con ese nombre';
+            } else if (!hasCommands) {
+                step1Hint.textContent = 'Selecciona al menos un bloque';
+            } else {
+                step1Hint.textContent = '';
+            }
         }
 
         function renderRoutineList() {
@@ -714,23 +944,49 @@ function getWebviewContent(blocks: Block[], routines: Record<string, Routine>) {
             if (names.length === 0) {
                 routineList.innerHTML = '<div class="empty-state">No hay rutinas creadas.<br>Crea tu primera rutina!</div>';
             } else {
-                routineList.innerHTML = names.map(name => {
+                routineList.innerHTML = names.map((name, idx) => {
                     const r = routines[name];
+                    const isEnabled = r.enabled !== false;
                     const cmdLabels = r.commands.map(cmd => {
                         const block = BLOCKS.find(b => b.command === cmd);
                         return block ? block.label : cmd;
                     }).join(' -> ');
 
-                    return '<div class="routine-card">' +
+                    return '<div class="routine-card' + (isEnabled ? '' : ' disabled') + '">' +
+                        '<canvas class="routine-preview" id="preview-' + idx + '" width="60" height="60"></canvas>' +
                         '<div class="routine-info">' +
-                        '<div class="routine-name">' + r.name + '</div>' +
+                        '<div class="routine-name">' + r.name + (isEnabled ? '' : ' (desactivada)') + '</div>' +
                         '<div class="routine-commands">' + cmdLabels + '</div>' +
                         '</div>' +
                         '<div class="routine-actions">' +
+                        '<button class="secondary" data-toggle="' + name + '">' + (isEnabled ? 'Desactivar' : 'Activar') + '</button>' +
+                        '<button class="secondary" data-edit="' + name + '">Editar</button>' +
                         '<button class="danger" data-delete="' + name + '">Eliminar</button>' +
                         '</div>' +
                         '</div>';
                 }).join('');
+
+                // Draw gesture previews
+                names.forEach((name, idx) => {
+                    const r = routines[name];
+                    if (r.samples && r.samples.length > 0) {
+                        drawGesturePreview('preview-' + idx, r.samples[0]);
+                    }
+                });
+
+                // Add toggle handlers
+                routineList.querySelectorAll('[data-toggle]').forEach(el => {
+                    el.addEventListener('click', () => {
+                        vscode.postMessage({ command: 'toggleRoutine', name: el.dataset.toggle });
+                    });
+                });
+
+                // Add edit handlers
+                routineList.querySelectorAll('[data-edit]').forEach(el => {
+                    el.addEventListener('click', () => {
+                        editRoutine(el.dataset.edit);
+                    });
+                });
 
                 // Add delete handlers
                 routineList.querySelectorAll('[data-delete]').forEach(el => {
@@ -743,11 +999,82 @@ function getWebviewContent(blocks: Block[], routines: Record<string, Routine>) {
             }
         }
 
+        function editRoutine(name) {
+            const r = routines[name];
+            if (!r) return;
+
+            editingRoutineName = name;
+            routineNameInput.value = r.name;
+            routineDelayInput.value = r.delay || 0;
+
+            // Load commands
+            selectedCommands = r.commands.map(cmd => {
+                return BLOCKS.find(b => b.command === cmd) || { id: cmd, label: cmd, command: cmd, category: 'files' };
+            });
+
+            // Load samples
+            recordedSamples = r.samples ? r.samples.slice() : [];
+
+            renderSelectedBlocks();
+            validateStep1();
+            updateSampleDots();
+            btnSaveRoutine.disabled = recordedSamples.length < REQUIRED_SAMPLES;
+
+            showView('create');
+            showStep(1);
+        }
+
+        // Draw a normalized gesture preview on a mini canvas
+        function drawGesturePreview(canvasId, points) {
+            const canvas = document.getElementById(canvasId);
+            if (!canvas || !points || points.length < 2) return;
+
+            const ctx = canvas.getContext('2d');
+            const padding = 8;
+            const size = 60 - padding * 2;
+
+            // Find bounding box
+            let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+            points.forEach(p => {
+                minX = Math.min(minX, p.x);
+                minY = Math.min(minY, p.y);
+                maxX = Math.max(maxX, p.x);
+                maxY = Math.max(maxY, p.y);
+            });
+
+            const width = maxX - minX || 1;
+            const height = maxY - minY || 1;
+            const scale = Math.min(size / width, size / height);
+
+            // Center offset
+            const offsetX = padding + (size - width * scale) / 2;
+            const offsetY = padding + (size - height * scale) / 2;
+
+            // Draw
+            ctx.strokeStyle = getThemeColor('--vscode-editorCursor-foreground', getThemeColor('--vscode-focusBorder', '#888'));
+            ctx.lineWidth = 2;
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            ctx.beginPath();
+
+            points.forEach((p, i) => {
+                const x = (p.x - minX) * scale + offsetX;
+                const y = (p.y - minY) * scale + offsetY;
+                if (i === 0) {
+                    ctx.moveTo(x, y);
+                } else {
+                    ctx.lineTo(x, y);
+                }
+            });
+
+            ctx.stroke();
+        }
+
         // Canvas Setup
         function setupCanvas() {
             ctx.lineCap = 'round';
             ctx.lineJoin = 'round';
-            ctx.strokeStyle = '#FFD700';
+            ctx.strokeStyle = getThemeColor('--vscode-editorCursor-foreground', getThemeColor('--vscode-focusBorder', '#888'));
             ctx.lineWidth = 4;
 
             canvas.addEventListener('mousedown', startPosition);
@@ -768,12 +1095,16 @@ function getWebviewContent(blocks: Block[], routines: Record<string, Routine>) {
             ctx.beginPath();
 
             if (points.length > 5) {
-                recordedSamples.push(points);
-                updateSampleDots();
+                // Store points for validation
+                pendingValidation = points.slice();
+                validationRequestId++;
 
-                if (recordedSamples.length >= REQUIRED_SAMPLES) {
-                    btnSaveRoutine.disabled = false;
-                }
+                // Send to backend for validation
+                vscode.postMessage({
+                    command: 'validateGesture',
+                    points: pendingValidation,
+                    requestId: validationRequestId
+                });
             }
 
             points = [];
