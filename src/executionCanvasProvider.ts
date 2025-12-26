@@ -172,7 +172,9 @@ export class ExecutionCanvasProvider {
         let gestureCount = 0;
         let recognizedCount = 0;
         let isProcessing = false; // Debounce: evitar múltiples reconocimientos simultáneos
+        let processingTimeout = null; // Timeout de seguridad
         const MAX_POINTS = 500; // Limitar puntos para evitar lag
+        const PROCESSING_TIMEOUT_MS = 5000; // Timeout máximo para procesar
 
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
@@ -233,6 +235,16 @@ export class ExecutionCanvasProvider {
                 gestureCount++;
                 gestureCountEl.textContent = gestureCount;
 
+                // Timeout de seguridad: resetear isProcessing si no hay respuesta
+                if (processingTimeout) clearTimeout(processingTimeout);
+                processingTimeout = setTimeout(() => {
+                    if (isProcessing) {
+                        isProcessing = false;
+                        showFeedback('Timeout - reintenta', 'failure');
+                        setTimeout(() => showFeedback('', 'failure'), 2000);
+                    }
+                }, PROCESSING_TIMEOUT_MS);
+
                 vscode.postMessage({
                     command: 'recognizeGesture',
                     points: points
@@ -257,6 +269,10 @@ export class ExecutionCanvasProvider {
             const message = event.data;
             if (message.command === 'recognitionResult') {
                 isProcessing = false; // Permitir nuevo reconocimiento
+                if (processingTimeout) {
+                    clearTimeout(processingTimeout);
+                    processingTimeout = null;
+                }
                 const score = Math.round(message.score * 100);
                 if (message.recognized) {
                     recognizedCount++;

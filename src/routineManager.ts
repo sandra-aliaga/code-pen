@@ -4,7 +4,7 @@
  */
 
 import * as vscode from 'vscode';
-import { Point } from './recognizer';
+import { DollarRecognizer, Point } from './recognizer';
 
 export interface Routine {
     name: string;
@@ -71,27 +71,35 @@ export class RoutineManager {
 
     /**
      * Create or update a routine
+     * @throws Error if routine data is invalid
      */
     async save_routine(routine: Routine): Promise<void> {
-        const now = Date.now();
-        const existing = this.routines[routine.name];
+        // Validación de entrada
+        if (!routine.name || routine.name.trim().length === 0) {
+            throw new Error('El nombre de la rutina no puede estar vacío');
+        }
+        if (!routine.commands || routine.commands.length === 0) {
+            throw new Error('La rutina debe tener al menos un comando');
+        }
+        if (!routine.samples || routine.samples.length === 0) {
+            throw new Error('La rutina debe tener al menos una muestra de gesto');
+        }
 
-        this.routines[routine.name] = {
+        const now = Date.now();
+        const existing = this.routines[routine.name.trim()];
+
+        this.routines[routine.name.trim()] = {
             ...routine,
+            name: routine.name.trim(),
             createdAt: existing?.createdAt || now,
             updatedAt: now,
             enabled: routine.enabled ?? true
         };
 
         await this.save();
-        
+
         // Limpiar cache del algoritmo $1
-        try {
-            const { DollarRecognizer } = await import('./recognizer.js');
-            DollarRecognizer.clearCache();
-        } catch (e) {
-            // Ignore if import fails
-        }
+        DollarRecognizer.clearCache();
     }
 
     /**

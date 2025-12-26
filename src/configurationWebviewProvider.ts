@@ -3,11 +3,11 @@
  * Provides UI for creating and managing routines
  */
 
-import * as vscode from 'vscode';
-import { Point } from './recognizer';
-import { Routine, RoutineManager } from './routineManager';
-import { GestureValidator } from './gestureValidator';
-import { Block, PREDEFINED_BLOCKS } from './blocks';
+import * as vscode from "vscode";
+import { Block, PREDEFINED_BLOCKS } from "./blocks";
+import { GestureValidator } from "./gestureValidator";
+import { Point } from "./recognizer";
+import { Routine, RoutineManager } from "./routineManager";
 
 export class ConfigurationWebviewProvider {
     private panel: vscode.WebviewPanel | undefined;
@@ -23,7 +23,7 @@ export class ConfigurationWebviewProvider {
         this.outputChannel = outputChannel;
     }
 
-    show(): void {
+    async show(): Promise<void> {
         // Always create new panel
         if (this.panel) {
             this.panel.dispose();
@@ -31,16 +31,21 @@ export class ConfigurationWebviewProvider {
         }
 
         this.panel = vscode.window.createWebviewPanel(
-            'codePenConfig',
-            'Code Pen - Configurar',
+            "codePenConfig",
+            "Code Pen - Configurar",
             vscode.ViewColumn.Beside,
             {
                 enableScripts: true,
-                retainContextWhenHidden: false
+                retainContextWhenHidden: false,
             }
         );
 
-        this.updateWebviewContent();
+        // Obtener todos los comandos de VS Code
+        const allCommands = await vscode.commands.getCommands(true);
+        // Filtrar comandos internos (que empiezan con _)
+        const filteredCommands = allCommands.filter(cmd => !cmd.startsWith("_")).sort();
+
+        this.updateWebviewContent(filteredCommands);
 
         this.panel.onDidDispose(() => {
             this.panel = undefined;
@@ -48,36 +53,42 @@ export class ConfigurationWebviewProvider {
 
         this.panel.webview.onDidReceiveMessage(async message => {
             switch (message.command) {
-                case 'log':
+                case "log":
                     this.outputChannel.appendLine(message.text);
                     break;
-                case 'saveRoutine':
+                case "saveRoutine":
                     await this.handleSaveRoutine(message);
                     break;
-                case 'deleteRoutine':
+                case "deleteRoutine":
                     await this.handleDeleteRoutine(message.name);
                     break;
-                case 'toggleRoutine':
+                case "toggleRoutine":
                     await this.handleToggleRoutine(message.name);
                     break;
-                case 'validateGesture':
+                case "validateGesture":
                     await this.handleValidateGesture(message);
                     break;
-                case 'testRoutine':
+                case "testRoutine":
                     await this.handleTestRoutine(message);
                     break;
             }
         });
     }
 
+    private cachedCommands: string[] = [];
+
     /**
      * Update webview content with current routines
      */
-    private updateWebviewContent(): void {
+    private updateWebviewContent(commands?: string[]): void {
         if (!this.panel) return;
 
+        if (commands) {
+            this.cachedCommands = commands;
+        }
+
         const routines = this.routineManager.getAll();
-        this.panel.webview.html = this.getWebviewContent(PREDEFINED_BLOCKS, routines);
+        this.panel.webview.html = this.getWebviewContent(PREDEFINED_BLOCKS, routines, this.cachedCommands);
     }
 
     /**
@@ -88,8 +99,8 @@ export class ConfigurationWebviewProvider {
 
         const routines = this.routineManager.getAll();
         this.panel.webview.postMessage({
-            command: 'routinesUpdated',
-            routines
+            command: "routinesUpdated",
+            routines,
         });
     }
 
@@ -101,20 +112,26 @@ export class ConfigurationWebviewProvider {
             name: message.name,
             commands: message.commands,
             samples: message.samples,
-            delay: message.delay || 0
+            delay: message.delay || 0,
         };
 
-        await this.routineManager.save_routine(routine);
+        try {
+            await this.routineManager.save_routine(routine);
 
-        vscode.window.showInformationMessage(
-            `Rutina guardada: "${message.name}" (${message.commands.length} comandos)`
-        );
+            vscode.window.showInformationMessage(
+                `Rutina guardada: "${message.name}" (${message.commands.length} comandos)`
+            );
 
-        this.outputChannel.appendLine(
-            `[Config] Saved routine "${message.name}". Commands: ${message.commands.join(' -> ')}`
-        );
+            this.outputChannel.appendLine(
+                `[Config] Saved routine "${message.name}". Commands: ${message.commands.join(" -> ")}`
+            );
 
-        this.sendRoutinesUpdate();
+            this.sendRoutinesUpdate();
+        } catch (err) {
+            const errorMsg = err instanceof Error ? err.message : String(err);
+            vscode.window.showErrorMessage(`Error al guardar rutina: ${errorMsg}`);
+            this.outputChannel.appendLine(`[Config] Error saving routine: ${errorMsg}`);
+        }
     }
 
     /**
@@ -150,49 +167,45 @@ export class ConfigurationWebviewProvider {
             try {
                 const allRoutines = this.routineManager.getAll();
                 const existingGestures: Record<string, Point[][]> = {};
-                
+
                 // Solo validar contra rutinas DIFERENTES (ya guardadas)
                 for (const [name, routine] of Object.entries(allRoutines)) {
                     if (routine.samples && routine.samples.length > 0) {
                         existingGestures[name] = routine.samples;
                     }
                 }
-                
+
                 // Si no hay rutinas guardadas, aceptar
                 if (Object.keys(existingGestures).length === 0) {
                     this.panel?.webview.postMessage({
-                        command: 'gestureValidation',
+                        command: "gestureValidation",
                         requestId: message.requestId,
                         isValid: true,
                         score: 1.0,
-                        message: 'OK'
+                        message: "OK",
                     });
                     return;
                 }
-                
-                // Validar con algoritmo $1
-                const validation = GestureValidator.validate(
-                    message.points,
-                    existingGestures,
-                    undefined
-                );
+
+                // Validar con algoritmo $1 (excluir rutina siendo editada)
+                const validation = GestureValidator.validate(message.points, existingGestures, message.excludeRoutineName);
 
                 this.panel?.webview.postMessage({
-                    command: 'gestureValidation',
+                    command: "gestureValidation",
                     requestId: message.requestId,
                     isValid: validation.isValid,
                     similarTo: validation.similarTo,
                     score: validation.score,
-                    message: validation.message
+                    message: validation.message,
                 });
             } catch (err) {
                 // Si falla, aceptar
                 this.panel?.webview.postMessage({
-                    command: 'gestureValidation',
+                    command: "gestureValidation",
                     requestId: message.requestId,
                     isValid: true,
                     score: 1.0,
-                    message: 'OK'
+                    message: "OK",
                 });
             }
         }, 0);
@@ -203,14 +216,10 @@ export class ConfigurationWebviewProvider {
      */
     private async handleTestRoutine(message: any): Promise<void> {
         const delay = message.delay || 0;
-        
-        vscode.window.showInformationMessage(
-            `Probando rutina...${delay > 0 ? ` (delay: ${delay}ms)` : ''}`
-        );
 
-        this.outputChannel.appendLine(
-            `[Config] Testing routine: ${message.commands.join(' -> ')} (delay: ${delay}ms)`
-        );
+        vscode.window.showInformationMessage(`Probando rutina...${delay > 0 ? ` (delay: ${delay}ms)` : ""}`);
+
+        this.outputChannel.appendLine(`[Config] Testing routine: ${message.commands.join(" -> ")} (delay: ${delay}ms)`);
 
         let successCount = 0;
         let failCount = 0;
@@ -245,15 +254,16 @@ export class ConfigurationWebviewProvider {
     /**
      * Get the HTML content for the webview
      */
-    private getWebviewContent(blocks: Block[], routines: Record<string, Routine>): string {
+    private getWebviewContent(blocks: Block[], routines: Record<string, Routine>, allCommands: string[]): string {
         const blocksJson = JSON.stringify(blocks);
         const routinesJson = JSON.stringify(routines);
+        const commandsJson = JSON.stringify(allCommands);
 
         // Return the full HTML (same as before but with updated validation logic)
-        return this.generateHTML(blocksJson, routinesJson);
+        return this.generateHTML(blocksJson, routinesJson, commandsJson);
     }
 
-    private generateHTML(blocksJson: string, routinesJson: string): string {
+    private generateHTML(blocksJson: string, routinesJson: string, commandsJson: string): string {
         // [This will contain the same HTML from extension.ts getWebviewContent but with improvements]
         // For brevity, I'll include the key changes and note this is the full implementation
         return `<!DOCTYPE html>
@@ -266,14 +276,13 @@ export class ConfigurationWebviewProvider {
 </head>
 <body>
     ${this.getBodyHTML()}
-    ${this.getScripts(blocksJson, routinesJson)}
+    ${this.getScripts(blocksJson, routinesJson, commandsJson)}
 </body>
 </html>`;
     }
 
-        private getStyles(): string {
-
-            return `<style>
+    private getStyles(): string {
+        return `<style>
 
             * { box-sizing: border-box; }
 
@@ -671,7 +680,32 @@ export class ConfigurationWebviewProvider {
 
             .hint-text { font-size: 12px; opacity: 0.7; margin-top: 8px; }
 
-    
+            /* Command Search Autocomplete */
+            .command-search-container { position: relative; flex: 1; }
+            .command-dropdown {
+                position: absolute;
+                top: 100%;
+                left: 0;
+                right: 0;
+                max-height: 200px;
+                overflow-y: auto;
+                background: var(--vscode-dropdown-background);
+                border: 1px solid var(--vscode-dropdown-border);
+                border-radius: 0 0 4px 4px;
+                z-index: 100;
+                display: none;
+            }
+            .command-dropdown.visible { display: block; }
+            .command-option {
+                padding: 8px 12px;
+                cursor: pointer;
+                font-size: 12px;
+                border-bottom: 1px solid var(--vscode-widget-border);
+            }
+            .command-option:hover { background: var(--vscode-list-hoverBackground); }
+            .command-option:last-child { border-bottom: none; }
+            .command-option .match { background: var(--vscode-editor-findMatchHighlightBackground); font-weight: bold; }
+            .command-count { font-size: 11px; opacity: 0.6; margin-top: 4px; }
 
             .form-row { display: flex; gap: 16px; }
 
@@ -755,7 +789,7 @@ export class ConfigurationWebviewProvider {
     private getBodyHTML(): string {
         return `
     <div id="mainView" class="view active">
-        <h1>⚙️ Code Pen - Configurar Rutinas</h1>
+        <h1>Code Pen - Configurar Rutinas</h1>
         <button id="btnNewRoutine">+ Nueva Rutina</button>
         <div id="routineList" class="routine-list"></div>
     </div>
@@ -776,20 +810,25 @@ export class ConfigurationWebviewProvider {
                     </div>
                 </div>
 
-                <!-- Custom Command Input -->
+                <!-- Custom Command Input with Search -->
                 <div style="margin-bottom: 20px; padding: 15px; background: var(--vscode-editor-background); border-radius: 4px; border: 1px solid var(--vscode-input-border);">
                     <h3 style="margin-top: 0; margin-bottom: 10px;">[+] Comando Personalizado</h3>
-                    <div style="display: flex; gap: 10px; align-items: center;">
-                        <input 
-                            type="text" 
-                            id="customCommandInput" 
-                            placeholder="Ejemplo: workbench.action.quickOpen"
-                            style="flex: 1; padding: 8px; background: var(--vscode-input-background); color: var(--vscode-input-foreground); border: 1px solid var(--vscode-input-border); border-radius: 3px;"
-                        />
+                    <div style="display: flex; gap: 10px; align-items: flex-start;">
+                        <div class="command-search-container">
+                            <input
+                                type="text"
+                                id="customCommandInput"
+                                placeholder="Buscar comando... (ej: save, zen, terminal)"
+                                autocomplete="off"
+                                style="padding: 8px; background: var(--vscode-input-background); color: var(--vscode-input-foreground); border: 1px solid var(--vscode-input-border); border-radius: 3px; width: 100%;"
+                            />
+                            <div id="commandDropdown" class="command-dropdown"></div>
+                            <div id="commandCount" class="command-count"></div>
+                        </div>
                         <button id="btnAddCustomCommand" style="padding: 8px 16px; cursor: pointer; background: #0e639c; color: white; border: none; border-radius: 3px;">Agregar</button>
                     </div>
                     <div style="margin-top: 8px; font-size: 0.9em; opacity: 0.7;">
-                        Agrega cualquier comando de VS Code. Usa Ctrl+Shift+P para ver todos.
+                        Escribe para buscar entre todos los comandos de VS Code
                     </div>
                 </div>
 
@@ -837,24 +876,33 @@ export class ConfigurationWebviewProvider {
     </div>`;
     }
 
-    private getScripts(blocksJson: string, routinesJson: string): string {
+    private getScripts(blocksJson: string, routinesJson: string, commandsJson: string): string {
         // Continue in next part due to length...
-        return `<script>${this.getJavaScriptCode(blocksJson, routinesJson)}</script>`;
+        return `<script>${this.getJavaScriptCode(blocksJson, routinesJson, commandsJson)}</script>`;
     }
 
-    private getJavaScriptCode(blocksJson: string, routinesJson: string): string {
+    private getJavaScriptCode(blocksJson: string, routinesJson: string, commandsJson: string): string {
         // This contains the full JavaScript from the original but with improved validation
         // The key improvement is better validation messages and user feedback
         return `
         const vscode = acquireVsCodeApi();
         const BLOCKS = ${blocksJson};
         let routines = ${routinesJson};
+        const ALL_COMMANDS = ${commandsJson};
         let selectedCommands = [];
         let recordedSamples = [];
         const REQUIRED_SAMPLES = 3;
         let editingRoutineName = null;
         let pendingValidation = null;
         let validationRequestId = 0;
+
+        // Función para sanitizar HTML y prevenir XSS
+        function escapeHtml(text) {
+            if (typeof text !== 'string') return '';
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
 
         const mainView = document.getElementById('mainView');
         const createView = document.getElementById('createView');
@@ -920,31 +968,130 @@ export class ConfigurationWebviewProvider {
 
         routineNameInput.addEventListener('input', validateStep1);
 
-        // Custom command input
+        // Custom command input with search
         const customCommandInput = document.getElementById('customCommandInput');
         const btnAddCustomCommand = document.getElementById('btnAddCustomCommand');
+        const commandDropdown = document.getElementById('commandDropdown');
+        const commandCount = document.getElementById('commandCount');
+        let selectedDropdownIndex = -1;
 
-        function addCustomCommand() {
-            const cmd = customCommandInput.value.trim();
-            if (cmd) {
+        function addCustomCommand(cmd) {
+            const command = cmd || customCommandInput.value.trim();
+            if (command) {
                 const customBlock = {
                     id: 'custom-' + Date.now(),
-                    label: '[Custom] ' + cmd,
+                    label: command,
                     icon: '',
-                    command: cmd,
+                    command: command,
                     category: 'files'
                 };
                 selectedCommands.push(customBlock);
                 renderSelectedBlocks();
                 validateStep1();
                 customCommandInput.value = '';
+                hideDropdown();
             }
         }
 
-        btnAddCustomCommand.addEventListener('click', addCustomCommand);
-        customCommandInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') {
-                addCustomCommand();
+        function searchCommands(query) {
+            if (!query || query.length < 2) {
+                hideDropdown();
+                commandCount.textContent = '';
+                return;
+            }
+
+            const lowerQuery = query.toLowerCase();
+            const matches = ALL_COMMANDS.filter(cmd =>
+                cmd.toLowerCase().includes(lowerQuery)
+            ).slice(0, 50); // Limitar a 50 resultados
+
+            commandCount.textContent = matches.length + ' comandos encontrados';
+
+            if (matches.length === 0) {
+                hideDropdown();
+                return;
+            }
+
+            commandDropdown.innerHTML = matches.map((cmd, i) => {
+                // Resaltar la coincidencia
+                const idx = cmd.toLowerCase().indexOf(lowerQuery);
+                const before = escapeHtml(cmd.slice(0, idx));
+                const match = escapeHtml(cmd.slice(idx, idx + query.length));
+                const after = escapeHtml(cmd.slice(idx + query.length));
+                return '<div class="command-option" data-cmd="' + escapeHtml(cmd) + '" data-index="' + i + '">' +
+                    before + '<span class="match">' + match + '</span>' + after +
+                    '</div>';
+            }).join('');
+
+            commandDropdown.classList.add('visible');
+            selectedDropdownIndex = -1;
+
+            // Añadir listeners a las opciones
+            commandDropdown.querySelectorAll('.command-option').forEach(el => {
+                el.addEventListener('click', () => {
+                    addCustomCommand(el.dataset.cmd);
+                });
+            });
+        }
+
+        function hideDropdown() {
+            commandDropdown.classList.remove('visible');
+            selectedDropdownIndex = -1;
+        }
+
+        function navigateDropdown(direction) {
+            const options = commandDropdown.querySelectorAll('.command-option');
+            if (options.length === 0) return;
+
+            // Quitar selección anterior
+            if (selectedDropdownIndex >= 0 && options[selectedDropdownIndex]) {
+                options[selectedDropdownIndex].style.background = '';
+            }
+
+            // Nueva selección
+            selectedDropdownIndex += direction;
+            if (selectedDropdownIndex < 0) selectedDropdownIndex = options.length - 1;
+            if (selectedDropdownIndex >= options.length) selectedDropdownIndex = 0;
+
+            // Aplicar selección
+            options[selectedDropdownIndex].style.background = 'var(--vscode-list-activeSelectionBackground)';
+            options[selectedDropdownIndex].scrollIntoView({ block: 'nearest' });
+        }
+
+        btnAddCustomCommand.addEventListener('click', () => addCustomCommand());
+
+        customCommandInput.addEventListener('input', (e) => {
+            searchCommands(e.target.value);
+        });
+
+        customCommandInput.addEventListener('keydown', (e) => {
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                navigateDropdown(1);
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                navigateDropdown(-1);
+            } else if (e.key === 'Enter') {
+                e.preventDefault();
+                const options = commandDropdown.querySelectorAll('.command-option');
+                if (selectedDropdownIndex >= 0 && options[selectedDropdownIndex]) {
+                    addCustomCommand(options[selectedDropdownIndex].dataset.cmd);
+                } else if (customCommandInput.value.trim()) {
+                    addCustomCommand();
+                }
+            } else if (e.key === 'Escape') {
+                hideDropdown();
+            }
+        });
+
+        customCommandInput.addEventListener('blur', () => {
+            // Delay para permitir click en opción
+            setTimeout(hideDropdown, 200);
+        });
+
+        customCommandInput.addEventListener('focus', () => {
+            if (customCommandInput.value.length >= 2) {
+                searchCommands(customCommandInput.value);
             }
         });
 
@@ -1029,8 +1176,8 @@ export class ConfigurationWebviewProvider {
             BLOCKS.forEach(block => categories[block.category].blocks.push(block));
 
             blocksContainer.innerHTML = Object.entries(categories).map(([key, cat]) =>
-                '<div class="category"><h3>' + cat.name + '</h3><div class="blocks-grid">' +
-                cat.blocks.map(b => '<div class="block" data-id="' + b.id + '"><span>' + b.label + '</span></div>').join('') +
+                '<div class="category"><h3>' + escapeHtml(cat.name) + '</h3><div class="blocks-grid">' +
+                cat.blocks.map(b => '<div class="block" data-id="' + escapeHtml(b.id) + '"><span>' + escapeHtml(b.label) + '</span></div>').join('') +
                 '</div></div>'
             ).join('');
 
@@ -1055,7 +1202,7 @@ export class ConfigurationWebviewProvider {
                 selectedBlocksEl.innerHTML = selectedCommands.map((block, i) =>
                     '<div class="selected-item">' +
                     '<span class="order">' + (i + 1) + '</span>' +
-                    '<span class="block-label">' + block.label + '</span>' +
+                    '<span class="block-label">' + escapeHtml(block.label) + '</span>' +
                     '<span class="block-actions">' +
                     '<span class="move-btn" data-dir="up" data-index="' + i + '"' + (i === 0 ? ' style="visibility:hidden"' : '') + '>↑</span>' +
                     '<span class="move-btn" data-dir="down" data-index="' + i + '"' + (i === selectedCommands.length - 1 ? ' style="visibility:hidden"' : '') + '>↓</span>' +
@@ -1124,13 +1271,13 @@ export class ConfigurationWebviewProvider {
                     return '<div class="routine-card' + (isEnabled ? '' : ' disabled') + '">' +
                         '<canvas class="routine-preview" id="preview-' + idx + '" width="60" height="60"></canvas>' +
                         '<div class="routine-info">' +
-                        '<div class="routine-name">' + r.name + (isEnabled ? '' : ' (desactivada)') + '</div>' +
-                        '<div class="routine-commands">' + cmdLabels + '</div>' +
+                        '<div class="routine-name">' + escapeHtml(r.name) + (isEnabled ? '' : ' (desactivada)') + '</div>' +
+                        '<div class="routine-commands">' + escapeHtml(cmdLabels) + '</div>' +
                         '</div>' +
                         '<div class="routine-actions">' +
-                        '<button class="secondary" data-toggle="' + name + '">' + (isEnabled ? 'Desactivar' : 'Activar') + '</button>' +
-                        '<button class="secondary" data-edit="' + name + '">Editar</button>' +
-                        '<button class="danger" data-delete="' + name + '">Eliminar</button>' +
+                        '<button class="secondary" data-toggle="' + escapeHtml(name) + '">' + (isEnabled ? 'Desactivar' : 'Activar') + '</button>' +
+                        '<button class="secondary" data-edit="' + escapeHtml(name) + '">Editar</button>' +
+                        '<button class="danger" data-delete="' + escapeHtml(name) + '">Eliminar</button>' +
                         '</div></div>';
                 }).join('');
 

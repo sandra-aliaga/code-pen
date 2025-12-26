@@ -25,8 +25,20 @@ const AngleRange = 45.0;
 const AnglePrecision = 3.0; // Aumentado para menos iteraciones
 const Phi = 0.5 * (-1.0 + Math.sqrt(5.0)); // Golden Ratio
 
-// Cache para gestos normalizados
+// Cache para gestos normalizados con límite LRU
+const MAX_CACHE_SIZE = 100;
 const normalizedCache = new Map<string, Point[]>();
+
+function addToCache(key: string, value: Point[]): void {
+    if (normalizedCache.size >= MAX_CACHE_SIZE) {
+        // Eliminar la entrada más antigua (primera del Map)
+        const firstKey = normalizedCache.keys().next().value;
+        if (firstKey) {
+            normalizedCache.delete(firstKey);
+        }
+    }
+    normalizedCache.set(key, value);
+}
 
 export class DollarRecognizer {
     /**
@@ -38,9 +50,9 @@ export class DollarRecognizer {
         }
 
         const normalized = this.normalize(points);
-        
+
         if (cacheKey) {
-            normalizedCache.set(cacheKey, normalized);
+            addToCache(cacheKey, normalized);
         }
 
         return normalized;
@@ -161,10 +173,13 @@ export class DollarRecognizer {
 
     static scaleToSquare(points: Point[], size: number): Point[] {
         const B = this.boundingBox(points);
+        // Prevenir división por cero
+        const width = B.width || 1;
+        const height = B.height || 1;
         const newPoints: Point[] = [];
         points.forEach(p => {
-            const qx = p.x * (size / B.width);
-            const qy = p.y * (size / B.height);
+            const qx = p.x * (size / width);
+            const qy = p.y * (size / height);
             newPoints.push({ x: qx, y: qy });
         });
         return newPoints;
@@ -234,6 +249,9 @@ export class DollarRecognizer {
     }
 
     static centroid(points: Point[]): Point {
+        if (points.length === 0) {
+            return { x: 0, y: 0 };
+        }
         let x = 0.0,
             y = 0.0;
         points.forEach(p => {

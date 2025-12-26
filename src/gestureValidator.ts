@@ -13,7 +13,9 @@ export interface ValidationResult {
 }
 
 export class GestureValidator {
-    private static readonly SIMILARITY_THRESHOLD = 0.75;
+    // Threshold debe ser menor que RECOGNITION_THRESHOLD (0.80) para evitar
+    // que gestos válidos no sean reconocidos
+    private static readonly SIMILARITY_THRESHOLD = 0.78;
     private static readonly MIN_POINTS = 5;
 
     /**

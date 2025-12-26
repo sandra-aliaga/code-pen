@@ -20,7 +20,8 @@ export const PREDEFINED_BLOCKS: Block[] = [
     { id: 'closeAll', label: 'Cerrar Todo', icon: '', command: 'workbench.action.closeAllEditors', category: 'files' },
 
     // Focus
-    { id: 'zenMode', label: 'Modo Zen', icon: '', command: 'workbench.action.toggleZenMode', category: 'focus' },
+    { id: 'zenMode', label: 'Modo Zen (Toggle)', icon: '', command: 'workbench.action.toggleZenMode', category: 'focus' },
+    { id: 'exitZenMode', label: 'Salir Modo Zen', icon: '', command: 'workbench.action.exitZenMode', category: 'focus' },
     { id: 'toggleSidebar', label: 'Toggle Sidebar', icon: '', command: 'workbench.action.toggleSidebarVisibility', category: 'focus' },
     { id: 'togglePanel', label: 'Toggle Panel', icon: '', command: 'workbench.action.togglePanel', category: 'focus' },
     { id: 'fullScreen', label: 'Pantalla Completa', icon: '', command: 'workbench.action.toggleFullScreen', category: 'focus' },
