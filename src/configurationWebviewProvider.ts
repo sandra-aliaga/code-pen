@@ -211,6 +211,20 @@ export class ConfigurationWebviewProvider {
         }, 0);
     }
 
+    // Terminal para testing
+    private testTerminal: vscode.Terminal | undefined;
+
+    private getOrCreateTestTerminal(): vscode.Terminal {
+        if (this.testTerminal) {
+            const terminals = vscode.window.terminals;
+            if (terminals.includes(this.testTerminal)) {
+                return this.testTerminal;
+            }
+        }
+        this.testTerminal = vscode.window.createTerminal('Code Pen Test');
+        return this.testTerminal;
+    }
+
     /**
      * Handle test routine message
      */
@@ -219,28 +233,57 @@ export class ConfigurationWebviewProvider {
 
         vscode.window.showInformationMessage(`Probando rutina...${delay > 0 ? ` (delay: ${delay}ms)` : ""}`);
 
-        this.outputChannel.appendLine(`[Config] Testing routine: ${message.commands.join(" -> ")} (delay: ${delay}ms)`);
+        const commandLabels = message.commands.map((c: any) =>
+            typeof c === 'string' ? c : (c.label || c.command)
+        ).join(" -> ");
+
+        this.outputChannel.appendLine(`[Config] Testing routine: ${commandLabels} (delay: ${delay}ms)`);
 
         let successCount = 0;
         let failCount = 0;
 
         for (let i = 0; i < message.commands.length; i++) {
-            const cmd = message.commands[i];
+            const cmdObj = message.commands[i];
 
-            if (i > 0 && delay > 0) {
+            // Compatibilidad: si es string, convertir a objeto
+            const cmd = typeof cmdObj === 'string'
+                ? { command: cmdObj, type: 'vscode-command' as const }
+                : cmdObj;
+
+            // Apply delay (excepto para delays)
+            if (i > 0 && delay > 0 && cmd.type !== 'delay') {
                 await new Promise(resolve => setTimeout(resolve, delay));
             }
 
-            this.outputChannel.appendLine(`  -> Executing: ${cmd}`);
+            const label = cmd.label || cmd.command;
+            this.outputChannel.appendLine(`  -> [${cmd.type}] ${label}`);
 
             try {
-                await vscode.commands.executeCommand(cmd);
+                switch (cmd.type) {
+                    case 'delay':
+                        const delayMs = parseInt(cmd.command) || 0;
+                        if (delayMs > 0) {
+                            await new Promise(resolve => setTimeout(resolve, delayMs));
+                        }
+                        break;
+
+                    case 'terminal-command':
+                        const terminal = this.getOrCreateTestTerminal();
+                        terminal.show(true);
+                        terminal.sendText(cmd.command);
+                        break;
+
+                    case 'vscode-command':
+                    default:
+                        await vscode.commands.executeCommand(cmd.command);
+                        break;
+                }
                 successCount++;
             } catch (err) {
                 failCount++;
                 const errorMsg = err instanceof Error ? err.message : String(err);
                 this.outputChannel.appendLine(`  -> Error: ${errorMsg}`);
-                vscode.window.showWarningMessage(`Error en comando: ${cmd}`);
+                vscode.window.showWarningMessage(`Error en: ${label}`);
             }
         }
 
@@ -283,552 +326,672 @@ export class ConfigurationWebviewProvider {
 
     private getStyles(): string {
         return `<style>
+            :root {
+                --card-radius: 8px;
+                --spacing-xs: 4px;
+                --spacing-sm: 8px;
+                --spacing-md: 16px;
+                --spacing-lg: 24px;
+                --transition-fast: 0.15s ease;
+                --transition-normal: 0.25s ease;
+            }
 
-            * { box-sizing: border-box; }
+            * {
+                box-sizing: border-box;
+                margin: 0;
+                padding: 0;
+            }
 
             body {
-
-                margin: 0;
-
-                padding: 16px;
-
-                background-color: var(--vscode-editor-background);
-
+                background: var(--vscode-editor-background);
                 font-family: var(--vscode-font-family);
-
-                color: var(--vscode-editor-foreground);
-
+                color: var(--vscode-foreground);
+                line-height: 1.5;
+                padding: var(--spacing-lg);
                 min-height: 100vh;
-
             }
 
-            h1 { margin: 0 0 16px 0; font-size: 1.4em; }
+            /* Typography */
+            h1 {
+                font-size: 1.5em;
+                font-weight: 600;
+                margin-bottom: var(--spacing-lg);
+                color: var(--vscode-foreground);
+                letter-spacing: -0.02em;
+            }
 
-            h2 { margin: 0 0 12px 0; font-size: 1.1em; opacity: 0.9; }
+            h2 {
+                font-size: 1em;
+                font-weight: 600;
+                margin-bottom: var(--spacing-md);
+                color: var(--vscode-foreground);
+                opacity: 0.9;
+            }
 
-            h3 { margin: 0 0 8px 0; font-size: 0.95em; opacity: 0.7; text-transform: uppercase; }
+            h3 {
+                font-size: 0.75em;
+                font-weight: 500;
+                text-transform: uppercase;
+                letter-spacing: 0.05em;
+                color: var(--vscode-descriptionForeground);
+                margin-bottom: var(--spacing-sm);
+            }
 
-    
-
+            /* Buttons */
             button {
-
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                gap: var(--spacing-xs);
                 background: var(--vscode-button-background);
-
                 color: var(--vscode-button-foreground);
-
                 border: none;
-
-                padding: 8px 16px;
-
-                cursor: pointer;
-
+                padding: var(--spacing-sm) var(--spacing-md);
                 font-size: 13px;
-
-                border-radius: 4px;
-
+                font-weight: 500;
+                border-radius: var(--card-radius);
+                cursor: pointer;
+                transition: all var(--transition-fast);
             }
 
-            button:hover { background: var(--vscode-button-hoverBackground); }
+            button:hover:not(:disabled) {
+                background: var(--vscode-button-hoverBackground);
+                transform: translateY(-1px);
+            }
+
+            button:active:not(:disabled) {
+                transform: translateY(0);
+            }
 
             button.secondary {
-
-                background: var(--vscode-button-secondaryBackground);
-
+                background: transparent;
+                border: 1px solid var(--vscode-button-secondaryBackground);
                 color: var(--vscode-button-secondaryForeground);
-
             }
 
-            button.danger { background: var(--vscode-inputValidation-errorBackground); border: 1px solid var(--vscode-inputValidation-errorBorder); }
+            button.secondary:hover:not(:disabled) {
+                background: var(--vscode-button-secondaryBackground);
+            }
 
-            button:disabled { opacity: 0.5; cursor: not-allowed; }
+            button.danger {
+                background: transparent;
+                border: 1px solid var(--vscode-errorForeground);
+                color: var(--vscode-errorForeground);
+            }
 
-    
+            button.danger:hover:not(:disabled) {
+                background: var(--vscode-errorForeground);
+                color: var(--vscode-editor-background);
+            }
 
-            input[type="text"], input[type="number"] {
+            button:disabled {
+                opacity: 0.4;
+                cursor: not-allowed;
+                transform: none;
+            }
 
+            /* Inputs */
+            input[type="text"],
+            input[type="number"] {
                 background: var(--vscode-input-background);
-
                 color: var(--vscode-input-foreground);
-
                 border: 1px solid var(--vscode-input-border);
-
-                padding: 8px 12px;
-
+                padding: 10px 12px;
                 font-size: 13px;
-
-                border-radius: 4px;
-
+                border-radius: 6px;
                 width: 100%;
-
+                transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
             }
 
-    
+            input:focus {
+                outline: none;
+                border-color: var(--vscode-focusBorder);
+                box-shadow: 0 0 0 2px var(--vscode-focusBorder);
+            }
 
+            input::placeholder {
+                color: var(--vscode-input-placeholderForeground);
+            }
+
+            /* Views */
             .view { display: none; }
+            .view.active { display: block; animation: fadeIn 0.2s ease; }
 
-            .view.active { display: block; }
+            @keyframes fadeIn {
+                from { opacity: 0; transform: translateY(8px); }
+                to { opacity: 1; transform: translateY(0); }
+            }
 
-    
-
-            .routine-list { display: flex; flex-direction: column; gap: 8px; margin-top: 16px; }
+            /* Routine List */
+            .routine-list {
+                display: flex;
+                flex-direction: column;
+                gap: var(--spacing-sm);
+                margin-top: var(--spacing-lg);
+            }
 
             .routine-card {
-
                 background: var(--vscode-editor-inactiveSelectionBackground);
-
-                border: 1px solid var(--vscode-panel-border);
-
-                border-radius: 6px;
-
-                padding: 12px;
-
+                border: 1px solid var(--vscode-widget-border);
+                border-radius: var(--card-radius);
+                padding: var(--spacing-md);
                 display: flex;
-
-                gap: 12px;
-
+                gap: var(--spacing-md);
                 align-items: center;
+                flex-wrap: wrap;
+                transition: all var(--transition-fast);
+            }
 
-                flex-wrap: wrap; /* Allow wrapping for responsiveness */
-
+            .routine-card:hover {
+                border-color: var(--vscode-focusBorder);
+                box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
             }
 
             .routine-preview {
-
-                width: 60px;
-
-                height: 60px;
-
-                border: 1px solid var(--vscode-panel-border);
-
-                border-radius: 4px;
-
+                width: 56px;
+                height: 56px;
+                border: 1px solid var(--vscode-widget-border);
+                border-radius: 6px;
                 background: var(--vscode-editor-background);
-
                 flex-shrink: 0;
-
             }
 
-            .routine-info { flex: 1; min-width: 200px; } /* Ensure it takes space but wraps if needed */
+            .routine-info {
+                flex: 1;
+                min-width: 180px;
+            }
 
-            .routine-name { font-weight: bold; margin-bottom: 4px; }
+            .routine-name {
+                font-weight: 600;
+                font-size: 14px;
+                margin-bottom: 2px;
+            }
 
-            .routine-commands { font-size: 12px; opacity: 0.7; }
+            .routine-commands {
+                font-size: 12px;
+                color: var(--vscode-descriptionForeground);
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                max-width: 300px;
+            }
 
-            .routine-actions { display: flex; gap: 8px; margin-left: auto; } /* Push to right, but wrap if needed */
+            .routine-actions {
+                display: flex;
+                gap: var(--spacing-sm);
+                margin-left: auto;
+            }
 
-            .routine-actions button { padding: 4px 8px; font-size: 12px; }
+            .routine-actions button {
+                padding: 6px 12px;
+                font-size: 12px;
+            }
 
-            .routine-card.disabled { opacity: 0.5; }
+            .routine-card.disabled {
+                opacity: 0.5;
+            }
 
-            .routine-card.disabled .routine-preview { filter: grayscale(1); }
+            .routine-card.disabled .routine-preview {
+                filter: grayscale(1);
+            }
 
-    
-
+            /* Empty State */
             .empty-state {
-
                 text-align: center;
-
-                padding: 40px;
-
-                opacity: 0.6;
-
+                padding: 60px 20px;
+                color: var(--vscode-descriptionForeground);
             }
 
-    
+            .empty-state::before {
+                content: '';
+                display: block;
+                width: 64px;
+                height: 64px;
+                margin: 0 auto 16px;
+                background: var(--vscode-widget-border);
+                border-radius: 50%;
+                opacity: 0.3;
+            }
 
-            .create-container { display: flex; flex-direction: column; gap: 16px; }
+            /* Create Container */
+            .create-container {
+                display: flex;
+                flex-direction: column;
+                gap: var(--spacing-lg);
+            }
 
             .step { display: none; }
+            .step.active { display: block; animation: fadeIn 0.2s ease; }
 
-            .step.active { display: block; }
-
-    
-
-            .blocks-section { display: flex; gap: 16px; margin-top: 8px; }
-
-            .blocks-available { flex: 1; min-width: 0; /* Prevent overflow */ }
-
-            .blocks-selected { flex: 1; min-width: 0; /* Prevent overflow */ }
-
-    
-
-            .category { margin-bottom: 16px; }
-
-            .blocks-grid { display: flex; flex-wrap: wrap; gap: 6px; }
-
-    
-
-            .block {
-
-                display: inline-flex;
-
-                align-items: center;
-
-                gap: 6px;
-
-                padding: 6px 10px;
-
-                background: var(--vscode-badge-background);
-
-                color: var(--vscode-badge-foreground);
-
-                border-radius: 4px;
-
-                font-size: 12px;
-
-                cursor: pointer;
-
-                user-select: none;
-
-                transition: transform 0.1s, box-shadow 0.1s;
-
+            /* Form Layout */
+            .form-row {
+                display: flex;
+                gap: var(--spacing-md);
             }
 
-            .block:hover { transform: translateY(-1px); box-shadow: 0 2px 4px rgba(0,0,0,0.2); }
+            .form-field { flex: 1; }
+            .form-field-small { flex: 0 0 120px; }
 
-    
+            /* Custom Input Boxes */
+            .custom-inputs-grid {
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+                gap: var(--spacing-sm);
+            }
 
-            .selected-list {
+            .custom-input-box {
+                padding: var(--spacing-md);
+                background: var(--vscode-sideBar-background);
+                border: 1px solid var(--vscode-widget-border);
+                border-radius: var(--card-radius);
+                transition: border-color var(--transition-fast);
+            }
 
-                min-height: 100px;
+            .custom-input-box:hover {
+                border-color: var(--vscode-focusBorder);
+            }
 
-                background: var(--vscode-editor-inactiveSelectionBackground);
+            .custom-input-box h3 {
+                text-transform: none;
+                font-size: 11px;
+                margin-bottom: var(--spacing-sm);
+            }
 
-                border: 2px dashed var(--vscode-panel-border);
-
-                border-radius: 6px;
-
-                padding: 8px;
-
+            .custom-input-box .input-row {
                 display: flex;
+                gap: var(--spacing-sm);
+            }
 
+            .custom-input-box input {
+                flex: 1;
+                padding: 8px 10px;
+                font-size: 12px;
+            }
+
+            .custom-input-box button {
+                padding: 8px 14px;
+                font-size: 12px;
+                min-width: 40px;
+            }
+
+            /* Terminal Style */
+            .terminal-box {
+                border-color: var(--vscode-terminal-ansiCyan);
+                border-left-width: 3px;
+            }
+            .terminal-box h3 { color: var(--vscode-terminal-ansiCyan); }
+            .terminal-btn {
+                background: var(--vscode-terminal-ansiCyan) !important;
+                color: var(--vscode-editor-background) !important;
+            }
+
+            /* Delay Style */
+            .delay-box {
+                border-color: var(--vscode-terminal-ansiYellow);
+                border-left-width: 3px;
+            }
+            .delay-box h3 { color: var(--vscode-terminal-ansiYellow); }
+            .delay-btn {
+                background: var(--vscode-terminal-ansiYellow) !important;
+                color: var(--vscode-editor-background) !important;
+            }
+
+            /* Blocks Section */
+            .blocks-section {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: var(--spacing-lg);
+                margin-top: var(--spacing-md);
+            }
+
+            .category {
+                margin-bottom: var(--spacing-md);
+            }
+
+            .blocks-grid {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 6px;
+            }
+
+            .block {
+                display: inline-flex;
+                align-items: center;
+                padding: 6px 12px;
+                background: var(--vscode-badge-background);
+                color: var(--vscode-badge-foreground);
+                border-radius: 6px;
+                font-size: 12px;
+                font-weight: 500;
+                cursor: pointer;
+                user-select: none;
+                transition: all var(--transition-fast);
+                border: 1px solid transparent;
+            }
+
+            .block:hover {
+                transform: translateY(-2px);
+                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            }
+
+            .block.terminal-type {
+                border-left: 3px solid var(--vscode-terminal-ansiCyan);
+            }
+
+            .block.delay-type {
+                border-left: 3px solid var(--vscode-terminal-ansiYellow);
+            }
+
+            /* Selected List */
+            .selected-list {
+                min-height: 120px;
+                background: var(--vscode-sideBar-background);
+                border: 2px dashed var(--vscode-widget-border);
+                border-radius: var(--card-radius);
+                padding: var(--spacing-sm);
+                display: flex;
                 flex-direction: column;
+                gap: var(--spacing-xs);
+                transition: border-color var(--transition-fast);
+            }
 
-                gap: 4px;
-
+            .selected-list:hover {
+                border-color: var(--vscode-focusBorder);
             }
 
             .selected-list.empty::before {
-
-                content: 'Haz clic en los bloques para agregarlos aquí';
-
-                display: block;
-
-                text-align: center;
-
-                padding: 30px;
-
-                opacity: 0.5;
-
+                content: 'Haz clic en los bloques para agregarlos';
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                height: 100%;
+                min-height: 100px;
+                color: var(--vscode-descriptionForeground);
                 font-size: 12px;
-
             }
 
-    
-
             .selected-item {
-
                 display: flex;
-
                 align-items: center;
-
-                gap: 8px;
-
-                padding: 8px;
-
-                background: var(--vscode-button-background);
-
-                color: var(--vscode-button-foreground);
-
-                border-radius: 4px;
-
+                gap: var(--spacing-sm);
+                padding: 10px 12px;
+                background: var(--vscode-button-secondaryBackground);
+                color: var(--vscode-button-secondaryForeground);
+                border-radius: 6px;
                 font-size: 12px;
+                transition: all var(--transition-fast);
+            }
 
+            .selected-item:hover {
+                background: var(--vscode-list-hoverBackground);
             }
 
             .selected-item .order {
-
-                background: rgba(255,255,255,0.2);
-
-                padding: 2px 6px;
-
-                border-radius: 3px;
-
-                font-weight: bold;
-
-            }
-
-            .selected-item .block-label { flex: 1; word-break: break-all; } /* Break long words */
-
-            .selected-item .block-actions { display: flex; gap: 6px; }
-
-            .selected-item .move-btn, .selected-item .remove {
-
-                cursor: pointer;
-
-                opacity: 0.7;
-
-                padding: 2px 4px;
-
-            }
-
-            .selected-item .move-btn:hover, .selected-item .remove:hover { opacity: 1; }
-
-    
-
-            .canvas-container {
-
                 display: flex;
-
-                flex-direction: column;
-
                 align-items: center;
+                justify-content: center;
+                width: 24px;
+                height: 24px;
+                background: var(--vscode-badge-background);
+                color: var(--vscode-badge-foreground);
+                border-radius: 50%;
+                font-size: 11px;
+                font-weight: 600;
+                flex-shrink: 0;
+            }
 
-                gap: 16px;
+            .selected-item .block-label {
+                flex: 1;
+                font-weight: 500;
+            }
 
-                width: 100%;
+            .selected-item .block-actions {
+                display: flex;
+                gap: 4px;
+                opacity: 0;
+                transition: opacity var(--transition-fast);
+            }
 
+            .selected-item:hover .block-actions {
+                opacity: 1;
+            }
+
+            .selected-item .move-btn,
+            .selected-item .remove {
+                cursor: pointer;
+                padding: 4px 6px;
+                border-radius: 4px;
+                transition: background var(--transition-fast);
+            }
+
+            .selected-item .move-btn:hover,
+            .selected-item .remove:hover {
+                background: var(--vscode-toolbar-hoverBackground);
+            }
+
+            .selected-item.terminal-type {
+                border-left: 3px solid var(--vscode-terminal-ansiCyan);
+            }
+
+            .selected-item.delay-type {
+                border-left: 3px solid var(--vscode-terminal-ansiYellow);
+            }
+
+            /* Canvas Container */
+            .canvas-container {
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                gap: var(--spacing-lg);
+                padding: var(--spacing-lg);
+                background: var(--vscode-sideBar-background);
+                border-radius: var(--card-radius);
+            }
+
+            .canvas-container h2 {
+                margin: 0;
+            }
+
+            .canvas-container p {
+                color: var(--vscode-descriptionForeground);
+                font-size: 13px;
+                margin: 0;
             }
 
             #drawingCanvas {
-
-                border: 2px solid var(--vscode-panel-border);
-
-                border-radius: 8px;
-
+                border: 2px solid var(--vscode-widget-border);
+                border-radius: var(--card-radius);
                 cursor: crosshair;
-
                 background: var(--vscode-editor-background);
+                transition: border-color var(--transition-fast);
+            }
 
-                max-width: 100%; /* Responsive canvas */
-
-                height: auto;
-
+            #drawingCanvas:hover {
+                border-color: var(--vscode-focusBorder);
             }
 
             .sample-indicators {
-
                 display: flex;
-
-                gap: 12px;
-
-                font-size: 24px;
-
+                gap: var(--spacing-md);
             }
 
-            .sample-dot { opacity: 0.3; }
+            .sample-dot {
+                width: 12px;
+                height: 12px;
+                border-radius: 50%;
+                background: var(--vscode-widget-border);
+                transition: all var(--transition-normal);
+            }
 
-            .sample-dot.done { opacity: 1; }
+            .sample-dot.done {
+                background: var(--vscode-terminal-ansiGreen);
+                box-shadow: 0 0 8px var(--vscode-terminal-ansiGreen);
+            }
 
-    
-
+            /* Validation Message */
             .validation-message {
-
                 display: none;
-
-                padding: 10px 16px;
-
-                border-radius: 4px;
-
+                padding: 12px 20px;
+                border-radius: 6px;
                 font-size: 13px;
-
+                font-weight: 500;
                 max-width: 400px;
-
-                width: 100%;
-
                 text-align: center;
-
-                margin: 8px 0;
-
             }
 
-            .validation-message.visible { display: block; }
+            .validation-message.visible {
+                display: block;
+                animation: fadeIn 0.2s ease;
+            }
 
             .validation-message.error {
-
                 background: var(--vscode-inputValidation-errorBackground);
-
-                color: var(--vscode-inputValidation-errorForeground);
-
                 border: 1px solid var(--vscode-inputValidation-errorBorder);
-
-            }
-
-            .validation-message.warning {
-
-                background: var(--vscode-inputValidation-warningBackground);
-
-                color: var(--vscode-inputValidation-warningForeground);
-
-                border: 1px solid var(--vscode-inputValidation-warningBorder);
-
+                color: var(--vscode-errorForeground);
             }
 
             .validation-message.success {
-
-                background: var(--vscode-terminal-ansiGreen);
-
-                color: var(--vscode-editor-background);
-
-                border: 1px solid var(--vscode-terminal-ansiBrightGreen);
-
+                background: var(--vscode-inputValidation-infoBackground);
+                border: 1px solid var(--vscode-inputValidation-infoBorder);
+                color: var(--vscode-foreground);
             }
 
-    
+            /* Navigation */
+            .nav-buttons {
+                display: flex;
+                gap: var(--spacing-sm);
+                margin-top: var(--spacing-lg);
+                padding-top: var(--spacing-lg);
+                border-top: 1px solid var(--vscode-widget-border);
+            }
 
-            .nav-buttons { display: flex; gap: 8px; margin-top: 16px; flex-wrap: wrap; }
+            .hint-text {
+                font-size: 12px;
+                color: var(--vscode-descriptionForeground);
+                margin-top: var(--spacing-sm);
+            }
 
-            .hint-text { font-size: 12px; opacity: 0.7; margin-top: 8px; }
+            /* Command Dropdown */
+            .command-search-container {
+                position: relative;
+                flex: 1;
+            }
 
-            /* Command Search Autocomplete */
-            .command-search-container { position: relative; flex: 1; }
             .command-dropdown {
                 position: absolute;
-                top: 100%;
+                top: calc(100% + 4px);
                 left: 0;
                 right: 0;
-                max-height: 200px;
+                max-height: 240px;
                 overflow-y: auto;
                 background: var(--vscode-dropdown-background);
                 border: 1px solid var(--vscode-dropdown-border);
-                border-radius: 0 0 4px 4px;
+                border-radius: 6px;
+                box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
                 z-index: 100;
                 display: none;
             }
-            .command-dropdown.visible { display: block; }
+
+            .command-dropdown.visible {
+                display: block;
+                animation: fadeIn 0.15s ease;
+            }
+
             .command-option {
-                padding: 8px 12px;
+                padding: 10px 12px;
                 cursor: pointer;
                 font-size: 12px;
                 border-bottom: 1px solid var(--vscode-widget-border);
+                transition: background var(--transition-fast);
             }
-            .command-option:hover { background: var(--vscode-list-hoverBackground); }
-            .command-option:last-child { border-bottom: none; }
-            .command-option .match { background: var(--vscode-editor-findMatchHighlightBackground); font-weight: bold; }
-            .command-count { font-size: 11px; opacity: 0.6; margin-top: 4px; }
 
-            .form-row { display: flex; gap: 16px; }
+            .command-option:hover {
+                background: var(--vscode-list-hoverBackground);
+            }
 
-            .form-field { flex: 1; }
+            .command-option:last-child {
+                border-bottom: none;
+            }
 
-            .form-field-small { flex: 0 0 100px; }
+            .command-option .match {
+                background: var(--vscode-editor-findMatchHighlightBackground);
+                font-weight: 600;
+                padding: 1px 2px;
+                border-radius: 2px;
+            }
 
-    
+            .command-count {
+                font-size: 11px;
+                color: var(--vscode-descriptionForeground);
+                margin-top: var(--spacing-xs);
+            }
 
-            /* Mobile/Responsive Adjustments */
-
+            /* Responsive */
             @media (max-width: 600px) {
+                body { padding: var(--spacing-md); }
 
-                .blocks-section {
-
-                    flex-direction: column;
-
-                }
-
-                
-
-                .form-row {
-
-                    flex-direction: column;
-
-                    gap: 8px;
-
-                }
-
-                
-
-                .form-field-small {
-
-                    flex: auto;
-
-                    width: 100%;
-
-                }
-
-    
-
-                .routine-actions {
-
-                    width: 100%;
-
-                    justify-content: flex-end;
-
-                    margin-top: 8px;
-
-                }
-
-                
-
-                .nav-buttons {
-
-                    flex-direction: column;
-
-                }
-
-                
-
-                .nav-buttons button {
-
-                    width: 100%;
-
-                }
-
-    
-
-                #drawingCanvas {
-
-                    width: 100%;
-
-                }
-
+                .blocks-section { grid-template-columns: 1fr; }
+                .form-row { flex-direction: column; }
+                .form-field-small { flex: auto; }
+                .routine-actions { width: 100%; margin-top: var(--spacing-sm); }
+                .nav-buttons { flex-direction: column; }
+                .nav-buttons button { width: 100%; }
+                .custom-inputs-grid { grid-template-columns: 1fr; }
             }
-
         </style>`;
     }
 
     private getBodyHTML(): string {
         return `
     <div id="mainView" class="view active">
-        <h1>Code Pen - Configurar Rutinas</h1>
-        <button id="btnNewRoutine">+ Nueva Rutina</button>
+        <h1>Configurar Rutinas</h1>
+        <button id="btnNewRoutine">Nueva Rutina</button>
         <div id="routineList" class="routine-list"></div>
     </div>
 
     <div id="createView" class="view">
-        <h1>Crear Nueva Rutina</h1>
+        <h1>Nueva Rutina</h1>
 
         <div id="step1" class="step active">
             <div class="create-container">
                 <div class="form-row">
                     <div class="form-field">
-                        <h3>Nombre de la Rutina</h3>
+                        <h3>Nombre</h3>
                         <input type="text" id="routineName" placeholder="Ej: Modo Focus, Deploy Rápido...">
                     </div>
                     <div class="form-field form-field-small">
-                        <h3>Delay (ms)</h3>
-                        <input type="number" id="routineDelay" value="0" min="0" max="5000" step="100" placeholder="0">
+                        <h3>Delay entre comandos</h3>
+                        <input type="number" id="routineDelay" value="0" min="0" max="5000" step="100" placeholder="0 ms">
                     </div>
                 </div>
 
-                <!-- Custom Command Input with Search -->
-                <div style="margin-bottom: 20px; padding: 15px; background: var(--vscode-editor-background); border-radius: 4px; border: 1px solid var(--vscode-input-border);">
-                    <h3 style="margin-top: 0; margin-bottom: 10px;">[+] Comando Personalizado</h3>
-                    <div style="display: flex; gap: 10px; align-items: flex-start;">
-                        <div class="command-search-container">
-                            <input
-                                type="text"
-                                id="customCommandInput"
-                                placeholder="Buscar comando... (ej: save, zen, terminal)"
-                                autocomplete="off"
-                                style="padding: 8px; background: var(--vscode-input-background); color: var(--vscode-input-foreground); border: 1px solid var(--vscode-input-border); border-radius: 3px; width: 100%;"
-                            />
-                            <div id="commandDropdown" class="command-dropdown"></div>
-                            <div id="commandCount" class="command-count"></div>
+                <div class="custom-inputs-grid">
+                    <div class="custom-input-box">
+                        <h3>Comando VS Code</h3>
+                        <div class="input-row">
+                            <div class="command-search-container">
+                                <input type="text" id="customCommandInput" placeholder="Buscar comando..." autocomplete="off">
+                                <div id="commandDropdown" class="command-dropdown"></div>
+                            </div>
+                            <button id="btnAddCustomCommand">+</button>
                         </div>
-                        <button id="btnAddCustomCommand" style="padding: 8px 16px; cursor: pointer; background: #0e639c; color: white; border: none; border-radius: 3px;">Agregar</button>
+                        <div id="commandCount" class="command-count"></div>
                     </div>
-                    <div style="margin-top: 8px; font-size: 0.9em; opacity: 0.7;">
-                        Escribe para buscar entre todos los comandos de VS Code
+
+                    <div class="custom-input-box terminal-box">
+                        <h3>Comando Terminal</h3>
+                        <div class="input-row">
+                            <input type="text" id="terminalCommandInput" placeholder="npm run build, git status...">
+                            <button id="btnAddTerminalCommand" class="terminal-btn">+</button>
+                        </div>
+                    </div>
+
+                    <div class="custom-input-box delay-box">
+                        <h3>Delay (ms)</h3>
+                        <div class="input-row">
+                            <input type="number" id="delayInput" placeholder="1000" min="0" max="30000">
+                            <button id="btnAddDelay" class="delay-btn">+</button>
+                        </div>
                     </div>
                 </div>
 
@@ -838,7 +1001,7 @@ export class ConfigurationWebviewProvider {
                         <div id="blocksContainer"></div>
                     </div>
                     <div class="blocks-selected">
-                        <h2>Tu Rutina</h2>
+                        <h2>Secuencia de Comandos</h2>
                         <div id="selectedBlocks" class="selected-list empty"></div>
                     </div>
                 </div>
@@ -846,7 +1009,7 @@ export class ConfigurationWebviewProvider {
                 <div class="nav-buttons">
                     <button class="secondary" id="btnCancelCreate">Cancelar</button>
                     <button class="secondary" id="btnTestRoutine" disabled>Probar</button>
-                    <button id="btnNextStep" disabled>Siguiente: Dibujar Gesto</button>
+                    <button id="btnNextStep" disabled>Siguiente</button>
                 </div>
                 <div id="step1Hint" class="hint-text"></div>
             </div>
@@ -854,13 +1017,14 @@ export class ConfigurationWebviewProvider {
 
         <div id="step2" class="step">
             <div class="canvas-container">
-                <h2>Dibuja el gesto para: <span id="gestureRoutineName"></span></h2>
-                <p style="opacity: 0.7; margin: 0;">Dibuja el mismo gesto 3 veces. Debe ser diferente de otras rutinas.</p>
+                <h2>Dibujar Gesto</h2>
+                <p>Rutina: <strong><span id="gestureRoutineName"></span></strong></p>
+                <p>Dibuja el mismo gesto 3 veces para registrarlo</p>
 
                 <div class="sample-indicators">
-                    <span class="sample-dot" id="dot1">○</span>
-                    <span class="sample-dot" id="dot2">○</span>
-                    <span class="sample-dot" id="dot3">○</span>
+                    <span class="sample-dot" id="dot1"></span>
+                    <span class="sample-dot" id="dot2"></span>
+                    <span class="sample-dot" id="dot3"></span>
                 </div>
 
                 <canvas id="drawingCanvas" width="400" height="300"></canvas>
@@ -869,7 +1033,7 @@ export class ConfigurationWebviewProvider {
 
                 <div class="nav-buttons">
                     <button class="secondary" id="btnBackStep">Atrás</button>
-                    <button id="btnSaveRoutine" disabled>Guardar Rutina</button>
+                    <button id="btnSaveRoutine" disabled>Guardar</button>
                 </div>
             </div>
         </div>
@@ -951,7 +1115,11 @@ export class ConfigurationWebviewProvider {
             vscode.postMessage({
                 command: 'saveRoutine',
                 name: routineNameInput.value,
-                commands: selectedCommands.map(b => b.command),
+                commands: selectedCommands.map(b => ({
+                    command: b.command,
+                    type: b.type || 'vscode-command',
+                    label: b.label
+                })),
                 samples: recordedSamples,
                 delay: parseInt(routineDelayInput.value) || 0
             });
@@ -961,7 +1129,11 @@ export class ConfigurationWebviewProvider {
         btnTestRoutine.addEventListener('click', () => {
             vscode.postMessage({
                 command: 'testRoutine',
-                commands: selectedCommands.map(b => b.command),
+                commands: selectedCommands.map(b => ({
+                    command: b.command,
+                    type: b.type || 'vscode-command',
+                    label: b.label
+                })),
                 delay: parseInt(routineDelayInput.value) || 0
             });
         });
@@ -978,20 +1150,73 @@ export class ConfigurationWebviewProvider {
         function addCustomCommand(cmd) {
             const command = cmd || customCommandInput.value.trim();
             if (command) {
-                const customBlock = {
+                selectedCommands.push({
                     id: 'custom-' + Date.now(),
                     label: command,
-                    icon: '',
                     command: command,
-                    category: 'files'
-                };
-                selectedCommands.push(customBlock);
+                    type: 'vscode-command'
+                });
                 renderSelectedBlocks();
                 validateStep1();
                 customCommandInput.value = '';
                 hideDropdown();
             }
         }
+
+        // Terminal command input
+        const terminalCommandInput = document.getElementById('terminalCommandInput');
+        const btnAddTerminalCommand = document.getElementById('btnAddTerminalCommand');
+
+        function addTerminalCommand() {
+            const command = terminalCommandInput.value.trim();
+            if (command) {
+                selectedCommands.push({
+                    id: 'term-' + Date.now(),
+                    label: command,
+                    command: command,
+                    type: 'terminal-command'
+                });
+                renderSelectedBlocks();
+                validateStep1();
+                terminalCommandInput.value = '';
+            }
+        }
+
+        btnAddTerminalCommand.addEventListener('click', addTerminalCommand);
+        terminalCommandInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                addTerminalCommand();
+            }
+        });
+
+        // Delay input
+        const delayInput = document.getElementById('delayInput');
+        const btnAddDelay = document.getElementById('btnAddDelay');
+
+        function addDelay() {
+            const delayMs = parseInt(delayInput.value) || 0;
+            if (delayMs > 0) {
+                const label = delayMs >= 1000 ? (delayMs / 1000) + 's' : delayMs + 'ms';
+                selectedCommands.push({
+                    id: 'delay-' + Date.now(),
+                    label: 'Delay ' + label,
+                    command: String(delayMs),
+                    type: 'delay'
+                });
+                renderSelectedBlocks();
+                validateStep1();
+                delayInput.value = '';
+            }
+        }
+
+        btnAddDelay.addEventListener('click', addDelay);
+        delayInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                addDelay();
+            }
+        });
 
         function searchCommands(query) {
             if (!query || query.length < 2) {
@@ -1170,22 +1395,38 @@ export class ConfigurationWebviewProvider {
                 focus: { name: 'Concentración', blocks: [] },
                 appearance: { name: 'Apariencia', blocks: [] },
                 terminal: { name: 'Terminal', blocks: [] },
-                git: { name: 'Git', blocks: [] }
+                git: { name: 'Git', blocks: [] },
+                utils: { name: 'Utilidades', blocks: [] }
             };
 
-            BLOCKS.forEach(block => categories[block.category].blocks.push(block));
+            BLOCKS.forEach(block => {
+                if (categories[block.category]) {
+                    categories[block.category].blocks.push(block);
+                }
+            });
 
-            blocksContainer.innerHTML = Object.entries(categories).map(([key, cat]) =>
-                '<div class="category"><h3>' + escapeHtml(cat.name) + '</h3><div class="blocks-grid">' +
-                cat.blocks.map(b => '<div class="block" data-id="' + escapeHtml(b.id) + '"><span>' + escapeHtml(b.label) + '</span></div>').join('') +
-                '</div></div>'
-            ).join('');
+            blocksContainer.innerHTML = Object.entries(categories)
+                .filter(([key, cat]) => cat.blocks.length > 0)
+                .map(([key, cat]) =>
+                    '<div class="category"><h3>' + escapeHtml(cat.name) + '</h3><div class="blocks-grid">' +
+                    cat.blocks.map(b => {
+                        const typeClass = b.type === 'terminal-command' ? ' terminal-type' :
+                                         b.type === 'delay' ? ' delay-type' : '';
+                        return '<div class="block' + typeClass + '" data-id="' + escapeHtml(b.id) + '"><span>' + escapeHtml(b.label) + '</span></div>';
+                    }).join('') +
+                    '</div></div>'
+                ).join('');
 
             blocksContainer.querySelectorAll('.block').forEach(el => {
                 el.addEventListener('click', () => {
                     const block = BLOCKS.find(b => b.id === el.dataset.id);
                     if (block) {
-                        selectedCommands.push(block);
+                        selectedCommands.push({
+                            id: block.id,
+                            label: block.label,
+                            command: block.command,
+                            type: block.type || 'vscode-command'
+                        });
                         renderSelectedBlocks();
                         validateStep1();
                     }
@@ -1199,16 +1440,21 @@ export class ConfigurationWebviewProvider {
                 selectedBlocksEl.classList.add('empty');
             } else {
                 selectedBlocksEl.classList.remove('empty');
-                selectedBlocksEl.innerHTML = selectedCommands.map((block, i) =>
-                    '<div class="selected-item">' +
-                    '<span class="order">' + (i + 1) + '</span>' +
-                    '<span class="block-label">' + escapeHtml(block.label) + '</span>' +
-                    '<span class="block-actions">' +
-                    '<span class="move-btn" data-dir="up" data-index="' + i + '"' + (i === 0 ? ' style="visibility:hidden"' : '') + '>↑</span>' +
-                    '<span class="move-btn" data-dir="down" data-index="' + i + '"' + (i === selectedCommands.length - 1 ? ' style="visibility:hidden"' : '') + '>↓</span>' +
-                    '<span class="remove" data-index="' + i + '">✕</span>' +
-                    '</span></div>'
-                ).join('');
+                selectedBlocksEl.innerHTML = selectedCommands.map((block, i) => {
+                    const type = block.type || 'vscode-command';
+                    const typeClass = type === 'terminal-command' ? ' terminal-type' :
+                                     type === 'delay' ? ' delay-type' : '';
+                    const typeLabel = type === 'terminal-command' ? '[T] ' :
+                                     type === 'delay' ? '[D] ' : '';
+                    return '<div class="selected-item' + typeClass + '">' +
+                        '<span class="order">' + (i + 1) + '</span>' +
+                        '<span class="block-label">' + typeLabel + escapeHtml(block.label) + '</span>' +
+                        '<span class="block-actions">' +
+                        '<span class="move-btn" data-dir="up" data-index="' + i + '"' + (i === 0 ? ' style="visibility:hidden"' : '') + '>↑</span>' +
+                        '<span class="move-btn" data-dir="down" data-index="' + i + '"' + (i === selectedCommands.length - 1 ? ' style="visibility:hidden"' : '') + '>↓</span>' +
+                        '<span class="remove" data-index="' + i + '">✕</span>' +
+                        '</span></div>';
+                }).join('');
 
                 selectedBlocksEl.querySelectorAll('.move-btn').forEach(el => {
                     el.addEventListener('click', () => {
@@ -1264,8 +1510,13 @@ export class ConfigurationWebviewProvider {
                     const r = routines[name];
                     const isEnabled = r.enabled !== false;
                     const cmdLabels = r.commands.map(cmd => {
-                        const block = BLOCKS.find(b => b.command === cmd);
-                        return block ? block.label : cmd;
+                        // Compatibilidad: si es string (formato antiguo)
+                        if (typeof cmd === 'string') {
+                            const block = BLOCKS.find(b => b.command === cmd);
+                            return block ? block.label : cmd;
+                        }
+                        // Formato nuevo: objeto con label
+                        return cmd.label || cmd.command;
                     }).join(' → ');
 
                     return '<div class="routine-card' + (isEnabled ? '' : ' disabled') + '">' +
@@ -1313,9 +1564,33 @@ export class ConfigurationWebviewProvider {
             editingRoutineName = name;
             routineNameInput.value = r.name;
             routineDelayInput.value = r.delay || 0;
-            selectedCommands = r.commands.map(cmd => 
-                BLOCKS.find(b => b.command === cmd) || { id: cmd, label: cmd, command: cmd, category: 'files' }
-            );
+
+            // Cargar comandos con compatibilidad hacia atrás
+            selectedCommands = r.commands.map(cmd => {
+                // Si es string (formato antiguo), buscar en bloques o crear objeto
+                if (typeof cmd === 'string') {
+                    const block = BLOCKS.find(b => b.command === cmd);
+                    return block ? {
+                        id: block.id,
+                        label: block.label,
+                        command: block.command,
+                        type: block.type || 'vscode-command'
+                    } : {
+                        id: cmd,
+                        label: cmd,
+                        command: cmd,
+                        type: 'vscode-command'
+                    };
+                }
+                // Si ya es objeto (formato nuevo)
+                return {
+                    id: cmd.command,
+                    label: cmd.label || cmd.command,
+                    command: cmd.command,
+                    type: cmd.type || 'vscode-command'
+                };
+            });
+
             recordedSamples = r.samples ? r.samples.slice() : [];
             renderSelectedBlocks();
             validateStep1();
@@ -1440,10 +1715,8 @@ export class ConfigurationWebviewProvider {
             for (let i = 1; i <= 3; i++) {
                 const dot = document.getElementById('dot' + i);
                 if (recordedSamples.length >= i) {
-                    dot.textContent = '●';
                     dot.classList.add('done');
                 } else {
-                    dot.textContent = '○';
                     dot.classList.remove('done');
                 }
             }

@@ -3,12 +3,15 @@
  * Safe commands that users can use to build routines
  */
 
+export type BlockType = 'vscode-command' | 'terminal-command' | 'delay';
+
 export interface Block {
     id: string;
     label: string;
     icon: string;
     command: string;
-    category: 'files' | 'focus' | 'appearance' | 'terminal' | 'git';
+    category: 'files' | 'focus' | 'appearance' | 'terminal' | 'git' | 'utils';
+    type?: BlockType; // default: 'vscode-command'
 }
 
 export const PREDEFINED_BLOCKS: Block[] = [
@@ -44,4 +47,18 @@ export const PREDEFINED_BLOCKS: Block[] = [
     { id: 'gitPull', label: 'Git Pull', icon: '', command: 'git.pull', category: 'git' },
     { id: 'gitStash', label: 'Git Stash', icon: '', command: 'git.stash', category: 'git' },
     { id: 'gitStashPop', label: 'Git Stash Pop', icon: '', command: 'git.stashPop', category: 'git' },
+
+    // Terminal Commands (se ejecutan en terminal)
+    { id: 'termNpmInstall', label: 'npm install', icon: '', command: 'npm install', category: 'terminal', type: 'terminal-command' },
+    { id: 'termNpmBuild', label: 'npm run build', icon: '', command: 'npm run build', category: 'terminal', type: 'terminal-command' },
+    { id: 'termNpmStart', label: 'npm start', icon: '', command: 'npm start', category: 'terminal', type: 'terminal-command' },
+    { id: 'termNpmTest', label: 'npm test', icon: '', command: 'npm test', category: 'terminal', type: 'terminal-command' },
+    { id: 'termGitStatus', label: 'git status', icon: '', command: 'git status', category: 'terminal', type: 'terminal-command' },
+    { id: 'termGitLog', label: 'git log', icon: '', command: 'git log --oneline -10', category: 'terminal', type: 'terminal-command' },
+
+    // Delays (pausas entre comandos)
+    { id: 'delay500', label: 'Delay 500ms', icon: '', command: '500', category: 'utils', type: 'delay' },
+    { id: 'delay1000', label: 'Delay 1s', icon: '', command: '1000', category: 'utils', type: 'delay' },
+    { id: 'delay2000', label: 'Delay 2s', icon: '', command: '2000', category: 'utils', type: 'delay' },
+    { id: 'delay5000', label: 'Delay 5s', icon: '', command: '5000', category: 'utils', type: 'delay' },
 ];

@@ -5,7 +5,7 @@
 
 import * as vscode from 'vscode';
 import { DollarRecognizer, Point } from './recognizer';
-import { Routine, RoutineManager } from './routineManager';
+import { Routine, RoutineCommand, RoutineManager } from './routineManager';
 
 export interface RecognitionResult {
     recognized: boolean;
@@ -93,6 +93,22 @@ export class GestureRecognitionEngine {
         };
     }
 
+    // Terminal reutilizable para comandos
+    private codePenTerminal: vscode.Terminal | undefined;
+
+    private getOrCreateTerminal(): vscode.Terminal {
+        // Verificar si la terminal existe y está activa
+        if (this.codePenTerminal) {
+            const terminals = vscode.window.terminals;
+            if (terminals.includes(this.codePenTerminal)) {
+                return this.codePenTerminal;
+            }
+        }
+        // Crear nueva terminal
+        this.codePenTerminal = vscode.window.createTerminal('Code Pen');
+        return this.codePenTerminal;
+    }
+
     /**
      * Execute a routine (run all its commands in sequence)
      * @param routine - The routine to execute
@@ -103,8 +119,12 @@ export class GestureRecognitionEngine {
         let successCount = 0;
         let failCount = 0;
 
+        const commandLabels = routine.commands.map(c =>
+            typeof c === 'string' ? c : (c.label || c.command)
+        ).join(' -> ');
+
         this.outputChannel.appendLine(`[Execution] Starting routine "${routine.name}"`);
-        this.outputChannel.appendLine(`  Commands: ${routine.commands.join(' -> ')}`);
+        this.outputChannel.appendLine(`  Commands: ${commandLabels}`);
         this.outputChannel.appendLine(`  Delay: ${delay}ms`);
 
         // Restaurar foco al editor original antes de ejecutar comandos
@@ -118,23 +138,50 @@ export class GestureRecognitionEngine {
         }
 
         for (let i = 0; i < routine.commands.length; i++) {
-            const cmd = routine.commands[i];
+            const cmdObj = routine.commands[i];
 
-            // Apply delay between commands
-            if (i > 0 && delay > 0) {
+            // Compatibilidad: si es string (rutinas antiguas), convertir a objeto
+            const cmd: RoutineCommand = typeof cmdObj === 'string'
+                ? { command: cmdObj, type: 'vscode-command' }
+                : cmdObj;
+
+            // Apply delay between commands (excepto si el comando actual ES un delay)
+            if (i > 0 && delay > 0 && cmd.type !== 'delay') {
                 await new Promise(resolve => setTimeout(resolve, delay));
             }
 
-            this.outputChannel.appendLine(`  [${i + 1}/${routine.commands.length}] Executing: ${cmd}`);
+            const label = cmd.label || cmd.command;
+            this.outputChannel.appendLine(`  [${i + 1}/${routine.commands.length}] ${cmd.type}: ${label}`);
 
             try {
-                await vscode.commands.executeCommand(cmd);
+                switch (cmd.type) {
+                    case 'delay':
+                        // Ejecutar delay
+                        const delayMs = parseInt(cmd.command) || 0;
+                        if (delayMs > 0) {
+                            await new Promise(resolve => setTimeout(resolve, delayMs));
+                        }
+                        break;
+
+                    case 'terminal-command':
+                        // Ejecutar en terminal
+                        const terminal = this.getOrCreateTerminal();
+                        terminal.show(true); // true = preservar foco
+                        terminal.sendText(cmd.command);
+                        break;
+
+                    case 'vscode-command':
+                    default:
+                        // Ejecutar comando de VS Code
+                        await vscode.commands.executeCommand(cmd.command);
+                        break;
+                }
                 successCount++;
             } catch (err) {
                 failCount++;
                 const errorMsg = err instanceof Error ? err.message : String(err);
                 this.outputChannel.appendLine(`  ✗ Error: ${errorMsg}`);
-                vscode.window.showWarningMessage(`Error ejecutando comando: ${cmd}`);
+                vscode.window.showWarningMessage(`Error ejecutando: ${label}`);
             }
         }
 

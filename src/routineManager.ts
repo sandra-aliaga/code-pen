@@ -5,10 +5,17 @@
 
 import * as vscode from 'vscode';
 import { DollarRecognizer, Point } from './recognizer';
+import { BlockType } from './blocks';
+
+export interface RoutineCommand {
+    command: string;
+    type: BlockType;
+    label?: string;
+}
 
 export interface Routine {
     name: string;
-    commands: string[];
+    commands: RoutineCommand[];
     samples: Point[][];
     enabled?: boolean;
     delay?: number;
