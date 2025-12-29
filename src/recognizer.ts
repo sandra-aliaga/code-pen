@@ -113,7 +113,8 @@ export class DollarRecognizer {
         let newPoints = this.resample(points, NumPoints);
         const radians = this.indicativeAngle(newPoints);
         newPoints = this.rotateBy(newPoints, -radians);
-        newPoints = this.scaleToSquare(newPoints, SquareSize);
+        // Use uniform scaling for shapes with aspect ratio close to 1 (circles, squares)
+        newPoints = this.scaleToSquareSmart(newPoints, SquareSize);
         newPoints = this.translateToOrigin(newPoints);
         return newPoints;
     }
@@ -183,6 +184,42 @@ export class DollarRecognizer {
             newPoints.push({ x: qx, y: qy });
         });
         return newPoints;
+    }
+
+    /**
+     * Smart scaling: uses uniform scaling for shapes with aspect ratio close to 1
+     * This improves recognition of circles, squares, and other symmetric shapes
+     */
+    static scaleToSquareSmart(points: Point[], size: number): Point[] {
+        const B = this.boundingBox(points);
+        const width = B.width || 1;
+        const height = B.height || 1;
+        const aspectRatio = Math.min(width, height) / Math.max(width, height);
+
+        // If aspect ratio is close to 1 (between 0.7 and 1.0), use uniform scaling
+        // This preserves the shape of circles and near-square gestures
+        if (aspectRatio > 0.7) {
+            return this.scaleUniform(points, size);
+        }
+
+        // Otherwise, use non-uniform scaling (original behavior)
+        return this.scaleToSquare(points, size);
+    }
+
+    /**
+     * Uniform scaling: scales proportionally to fit in a square
+     * Preserves aspect ratio of the original gesture
+     */
+    static scaleUniform(points: Point[], size: number): Point[] {
+        const B = this.boundingBox(points);
+        const width = B.width || 1;
+        const height = B.height || 1;
+        const scale = size / Math.max(width, height);
+
+        return points.map(p => ({
+            x: p.x * scale,
+            y: p.y * scale
+        }));
     }
 
     static translateToOrigin(points: Point[]): Point[] {
