@@ -1,0 +1,8 @@
+{
+  "extension.description": "Automate repetitive tasks in VS Code by drawing custom gestures",
+  "command.helloWorld": "ShDraw: Hello World",
+  "command.openExecutionCanvas": "ShDraw: Execute Gestures",
+  "command.openConfigPanel": "ShDraw: Configure Routines",
+  "command.toggleDrawing": "ShDraw: Toggle Drawing Mode (Legacy)",
+  "command.openCanvas": "ShDraw: Open Canvas (Legacy)"
+}

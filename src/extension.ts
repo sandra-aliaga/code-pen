@@ -1,9 +1,10 @@
 /**
- * Code Pen - VS Code Extension
+ * ShDraw - VS Code Extension
  * Gesture-based routine automation for VS Code
  */
 
 import * as vscode from 'vscode';
+import * as l10n from '@vscode/l10n';
 import { RoutineManager } from './routineManager';
 import { GestureRecognitionEngine } from './gestureRecognitionEngine';
 import { ExecutionCanvasProvider } from './executionCanvasProvider';
@@ -22,10 +23,10 @@ let statusBarConfig: vscode.StatusBarItem;
  * Extension activation
  */
 export function activate(context: vscode.ExtensionContext) {
-	console.log('[Code Pen] Activating extension...');
+	console.log('[ShDraw] Activating extension...');
 
 	// Initialize output channel
-	outputChannel = vscode.window.createOutputChannel('Code Pen');
+	outputChannel = vscode.window.createOutputChannel('ShDraw');
 	context.subscriptions.push(outputChannel);
 
 	// Initialize managers and engines
@@ -34,46 +35,46 @@ export function activate(context: vscode.ExtensionContext) {
 	executionCanvas = new ExecutionCanvasProvider(context, recognitionEngine);
 	configurationWebview = new ConfigurationWebviewProvider(context, routineManager, outputChannel);
 
-	console.log('[Code Pen] Initialized with', Object.keys(routineManager.getAll()).length, 'routines');
+	console.log('[ShDraw] Initialized with', Object.keys(routineManager.getAll()).length, 'routines');
 
 	// Create status bar items
 	statusBarExecute = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
-	statusBarExecute.text = "$(pencil) Dibujar";
-	statusBarExecute.tooltip = "Ejecutar gestos (Ctrl+Alt+D)";
-	statusBarExecute.command = 'code-pen.openExecutionCanvas';
+	statusBarExecute.text = `$(pencil) ${l10n.t('Draw')}`;
+	statusBarExecute.tooltip = l10n.t('Execute gestures (Ctrl+Alt+D)');
+	statusBarExecute.command = 'shdraw.openExecutionCanvas';
 	statusBarExecute.show();
 	context.subscriptions.push(statusBarExecute);
 
 	statusBarConfig = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 99);
-	statusBarConfig.text = "$(gear) Rutinas";
-	statusBarConfig.tooltip = "Configurar rutinas (Ctrl+Alt+A)";
-	statusBarConfig.command = 'code-pen.openConfigPanel';
+	statusBarConfig.text = `$(gear) ${l10n.t('Routines')}`;
+	statusBarConfig.tooltip = l10n.t('Configure routines (Ctrl+Alt+A)');
+	statusBarConfig.command = 'shdraw.openConfigPanel';
 	statusBarConfig.show();
 	context.subscriptions.push(statusBarConfig);
 
 	// Register commands
-	
+
 	// Legacy command - kept for compatibility
-	const disposableHello = vscode.commands.registerCommand('code-pen.helloWorld', () => {
-		vscode.window.showInformationMessage('Code Pen está activo! Usa Ctrl+Alt+A para ejecutar gestos o Ctrl+Alt+C para configurar rutinas.');
+	const disposableHello = vscode.commands.registerCommand('shdraw.helloWorld', () => {
+		vscode.window.showInformationMessage(l10n.t('ShDraw is active! Use Ctrl+Alt+D to execute gestures or Ctrl+Alt+A to configure routines.'));
 	});
 
 	// Open execution canvas
-	const disposableExecutionCanvas = vscode.commands.registerCommand('code-pen.openExecutionCanvas', () => {
+	const disposableExecutionCanvas = vscode.commands.registerCommand('shdraw.openExecutionCanvas', () => {
 		executionCanvas.show();
 	});
 
 	// Open configuration panel
-	const disposableConfigPanel = vscode.commands.registerCommand('code-pen.openConfigPanel', () => {
+	const disposableConfigPanel = vscode.commands.registerCommand('shdraw.openConfigPanel', () => {
 		configurationWebview.show();
 	});
 
 	// Legacy commands mapped to new ones
-	const disposableToggle = vscode.commands.registerCommand('code-pen.toggleDrawing', () => {
+	const disposableToggle = vscode.commands.registerCommand('shdraw.toggleDrawing', () => {
 		executionCanvas.show();
 	});
 
-	const disposableCanvas = vscode.commands.registerCommand('code-pen.openCanvas', () => {
+	const disposableCanvas = vscode.commands.registerCommand('shdraw.openCanvas', () => {
 		configurationWebview.show();
 	});
 
@@ -85,14 +86,14 @@ export function activate(context: vscode.ExtensionContext) {
 		disposableCanvas
 	);
 
-	console.log('[Code Pen] Extension activated successfully');
+	console.log('[ShDraw] Extension activated successfully');
 }
 
 /**
  * Extension deactivation
  */
 export function deactivate() {
-	console.log('[Code Pen] Deactivating extension');
+	console.log('[ShDraw] Deactivating extension');
 	if (outputChannel) {
 		outputChannel.dispose();
 	}

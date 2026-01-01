@@ -4,6 +4,7 @@
  */
 
 import * as vscode from 'vscode';
+import * as l10n from '@vscode/l10n';
 import { Point } from './recognizer';
 import { GestureRecognitionEngine } from './gestureRecognitionEngine';
 
@@ -30,8 +31,8 @@ export class ExecutionCanvasProvider {
         }
 
         this.panel = vscode.window.createWebviewPanel(
-            'codePenExecutionCanvas',
-            'Code Pen - Ejecutar',
+            'shdrawExecutionCanvas',
+            l10n.t('ShDraw - Execute'),
             vscode.ViewColumn.Beside,
             {
                 enableScripts: true,
@@ -82,7 +83,7 @@ export class ExecutionCanvasProvider {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Code Pen - Ejecutar</title>
+    <title>${l10n.t('ShDraw - Execute')}</title>
     <link rel="stylesheet" href="${styleUri}">
 </head>
 <body>

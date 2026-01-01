@@ -1,0 +1,46 @@
+{
+  "ShDraw is active! Use Ctrl+Alt+D to execute gestures or Ctrl+Alt+A to configure routines.": "ShDraw is active! Use Ctrl+Alt+D to execute gestures or Ctrl+Alt+A to configure routines.",
+  "Execute gestures (Ctrl+Alt+D)": "Execute gestures (Ctrl+Alt+D)",
+  "Configure routines (Ctrl+Alt+A)": "Configure routines (Ctrl+Alt+A)",
+  "Draw": "Draw",
+  "Routines": "Routines",
+
+  "ShDraw - Configure": "ShDraw - Configure",
+  "ShDraw - Execute": "ShDraw - Execute",
+  "ShDraw - Configure Routines": "ShDraw - Configure Routines",
+
+  "Routine saved: \"{0}\" ({1} commands)": "Routine saved: \"{0}\" ({1} commands)",
+  "Error saving routine: {0}": "Error saving routine: {0}",
+
+  "Testing routine...": "Testing routine...",
+  "Testing routine... (delay: {0}ms)": "Testing routine... (delay: {0}ms)",
+  "Test completed: {0} commands OK": "Test completed: {0} commands OK",
+  "Test completed with {0} error(s)": "Test completed with {0} error(s)",
+  "Error in: {0}": "Error in: {0}",
+
+  "Error executing: {0}": "Error executing: {0}",
+
+  "Configure Routines": "Configure Routines",
+  "New Routine": "New Routine",
+  "Name": "Name",
+  "Delay between commands": "Delay between commands",
+  "VS Code Command": "VS Code Command",
+  "Search command...": "Search command...",
+  "Terminal Command": "Terminal Command",
+  "Delay (ms)": "Delay (ms)",
+  "Available Blocks": "Available Blocks",
+  "Command Sequence": "Command Sequence",
+  "Cancel": "Cancel",
+  "Test": "Test",
+  "Next": "Next",
+  "Draw Gesture": "Draw Gesture",
+  "Routine:": "Routine:",
+  "Draw the same gesture 3 times to register it": "Draw the same gesture 3 times to register it",
+  "Back": "Back",
+  "Save": "Save",
+
+  "Execute Gestures": "Execute Gestures",
+  "Draw a gesture to execute a routine": "Draw a gesture to execute a routine",
+  "Drawn:": "Drawn:",
+  "Recognized:": "Recognized:"
+}

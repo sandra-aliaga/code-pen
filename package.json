@@ -1,7 +1,7 @@
 {
-  "name": "code-pen",
-  "displayName": "code-pen",
-  "description": "",
+  "name": "shdraw",
+  "displayName": "ShDraw",
+  "description": "%extension.description%",
   "version": "0.0.1",
   "engines": {
     "vscode": "^1.106.1"
@@ -11,37 +11,38 @@
   ],
   "activationEvents": [],
   "main": "./out/extension.js",
+  "l10n": "./l10n",
   "contributes": {
     "commands": [
       {
-        "command": "code-pen.helloWorld",
-        "title": "Code Pen: Hello World"
+        "command": "shdraw.helloWorld",
+        "title": "%command.helloWorld%"
       },
       {
-        "command": "code-pen.openExecutionCanvas",
-        "title": "Code Pen: Ejecutar Gestos"
+        "command": "shdraw.openExecutionCanvas",
+        "title": "%command.openExecutionCanvas%"
       },
       {
-        "command": "code-pen.openConfigPanel",
-        "title": "Code Pen: Configurar Rutinas"
+        "command": "shdraw.openConfigPanel",
+        "title": "%command.openConfigPanel%"
       },
       {
-        "command": "code-pen.toggleDrawing",
-        "title": "Code Pen: Toggle Drawing Mode (Legacy)"
+        "command": "shdraw.toggleDrawing",
+        "title": "%command.toggleDrawing%"
       },
       {
-        "command": "code-pen.openCanvas",
-        "title": "Code Pen: Open Canvas (Legacy)"
+        "command": "shdraw.openCanvas",
+        "title": "%command.openCanvas%"
       }
     ],
     "keybindings": [
       {
-        "command": "code-pen.openExecutionCanvas",
+        "command": "shdraw.openExecutionCanvas",
         "key": "ctrl+alt+d",
         "mac": "cmd+alt+d"
       },
       {
-        "command": "code-pen.openConfigPanel",
+        "command": "shdraw.openConfigPanel",
         "key": "ctrl+alt+a",
         "mac": "cmd+alt+a"
       }
@@ -56,13 +57,16 @@
     "test": "vscode-test"
   },
   "devDependencies": {
-    "@types/vscode": "^1.106.1",
     "@types/mocha": "^10.0.10",
     "@types/node": "22.x",
-    "typescript-eslint": "^8.46.3",
+    "@types/vscode": "^1.106.1",
+    "@vscode/test-cli": "^0.0.12",
+    "@vscode/test-electron": "^2.5.2",
     "eslint": "^9.39.1",
     "typescript": "^5.9.3",
-    "@vscode/test-cli": "^0.0.12",
-    "@vscode/test-electron": "^2.5.2"
+    "typescript-eslint": "^8.46.3"
+  },
+  "dependencies": {
+    "@vscode/l10n": "^0.0.18"
   }
 }

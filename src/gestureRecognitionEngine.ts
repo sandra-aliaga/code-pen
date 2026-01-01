@@ -4,6 +4,7 @@
  */
 
 import * as vscode from 'vscode';
+import * as l10n from '@vscode/l10n';
 import { DollarRecognizer, Point } from './recognizer';
 import { Routine, RoutineCommand, RoutineManager } from './routineManager';
 
@@ -105,7 +106,7 @@ export class GestureRecognitionEngine {
             }
         }
         // Crear nueva terminal
-        this.codePenTerminal = vscode.window.createTerminal('Code Pen');
+        this.codePenTerminal = vscode.window.createTerminal('ShDraw');
         return this.codePenTerminal;
     }
 
@@ -181,7 +182,7 @@ export class GestureRecognitionEngine {
                 failCount++;
                 const errorMsg = err instanceof Error ? err.message : String(err);
                 this.outputChannel.appendLine(`  ✗ Error: ${errorMsg}`);
-                vscode.window.showWarningMessage(`Error ejecutando: ${label}`);
+                vscode.window.showWarningMessage(l10n.t('Error executing: {0}', label));
             }
         }
 

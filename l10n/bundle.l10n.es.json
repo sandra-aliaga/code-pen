@@ -1,0 +1,46 @@
+{
+  "ShDraw is active! Use Ctrl+Alt+D to execute gestures or Ctrl+Alt+A to configure routines.": "ShDraw está activo! Usa Ctrl+Alt+D para ejecutar gestos o Ctrl+Alt+A para configurar rutinas.",
+  "Execute gestures (Ctrl+Alt+D)": "Ejecutar gestos (Ctrl+Alt+D)",
+  "Configure routines (Ctrl+Alt+A)": "Configurar rutinas (Ctrl+Alt+A)",
+  "Draw": "Dibujar",
+  "Routines": "Rutinas",
+
+  "ShDraw - Configure": "ShDraw - Configurar",
+  "ShDraw - Execute": "ShDraw - Ejecutar",
+  "ShDraw - Configure Routines": "ShDraw - Configurar Rutinas",
+
+  "Routine saved: \"{0}\" ({1} commands)": "Rutina guardada: \"{0}\" ({1} comandos)",
+  "Error saving routine: {0}": "Error al guardar rutina: {0}",
+
+  "Testing routine...": "Probando rutina...",
+  "Testing routine... (delay: {0}ms)": "Probando rutina... (delay: {0}ms)",
+  "Test completed: {0} commands OK": "Prueba completada: {0} comandos OK",
+  "Test completed with {0} error(s)": "Prueba completada con {0} error(es)",
+  "Error in: {0}": "Error en: {0}",
+
+  "Error executing: {0}": "Error ejecutando: {0}",
+
+  "Configure Routines": "Configurar Rutinas",
+  "New Routine": "Nueva Rutina",
+  "Name": "Nombre",
+  "Delay between commands": "Delay entre comandos",
+  "VS Code Command": "Comando VS Code",
+  "Search command...": "Buscar comando...",
+  "Terminal Command": "Comando Terminal",
+  "Delay (ms)": "Delay (ms)",
+  "Available Blocks": "Bloques Disponibles",
+  "Command Sequence": "Secuencia de Comandos",
+  "Cancel": "Cancelar",
+  "Test": "Probar",
+  "Next": "Siguiente",
+  "Draw Gesture": "Dibujar Gesto",
+  "Routine:": "Rutina:",
+  "Draw the same gesture 3 times to register it": "Dibuja el mismo gesto 3 veces para registrarlo",
+  "Back": "Atrás",
+  "Save": "Guardar",
+
+  "Execute Gestures": "Ejecutar Gestos",
+  "Draw a gesture to execute a routine": "Dibuja un gesto para ejecutar una rutina",
+  "Drawn:": "Dibujados:",
+  "Recognized:": "Reconocidos:"
+}

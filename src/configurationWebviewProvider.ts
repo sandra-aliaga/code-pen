@@ -4,6 +4,7 @@
  */
 
 import * as vscode from "vscode";
+import * as l10n from '@vscode/l10n';
 import { Block, PREDEFINED_BLOCKS } from "./blocks";
 import { GestureValidator } from "./gestureValidator";
 import { Point } from "./recognizer";
@@ -31,8 +32,8 @@ export class ConfigurationWebviewProvider {
         }
 
         this.panel = vscode.window.createWebviewPanel(
-            "codePenConfig",
-            "Code Pen - Configurar",
+            "shdrawConfig",
+            l10n.t("ShDraw - Configure"),
             vscode.ViewColumn.Beside,
             {
                 enableScripts: true,
@@ -122,7 +123,7 @@ export class ConfigurationWebviewProvider {
             await this.routineManager.save_routine(routine);
 
             vscode.window.showInformationMessage(
-                `Rutina guardada: "${message.name}" (${message.commands.length} comandos)`
+                l10n.t('Routine saved: "{0}" ({1} commands)', message.name, message.commands.length)
             );
 
             this.outputChannel.appendLine(
@@ -132,7 +133,7 @@ export class ConfigurationWebviewProvider {
             this.sendRoutinesUpdate();
         } catch (err) {
             const errorMsg = err instanceof Error ? err.message : String(err);
-            vscode.window.showErrorMessage(`Error al guardar rutina: ${errorMsg}`);
+            vscode.window.showErrorMessage(l10n.t('Error saving routine: {0}', errorMsg));
             this.outputChannel.appendLine(`[Config] Error saving routine: ${errorMsg}`);
         }
     }
@@ -224,7 +225,7 @@ export class ConfigurationWebviewProvider {
                 return this.testTerminal;
             }
         }
-        this.testTerminal = vscode.window.createTerminal('Code Pen Test');
+        this.testTerminal = vscode.window.createTerminal('ShDraw Test');
         return this.testTerminal;
     }
 
@@ -234,7 +235,11 @@ export class ConfigurationWebviewProvider {
     private async handleTestRoutine(message: any): Promise<void> {
         const delay = message.delay || 0;
 
-        vscode.window.showInformationMessage(`Probando rutina...${delay > 0 ? ` (delay: ${delay}ms)` : ""}`);
+        vscode.window.showInformationMessage(
+            delay > 0
+                ? l10n.t('Testing routine... (delay: {0}ms)', delay)
+                : l10n.t('Testing routine...')
+        );
 
         const commandLabels = message.commands.map((c: any) =>
             typeof c === 'string' ? c : (c.label || c.command)
@@ -286,14 +291,14 @@ export class ConfigurationWebviewProvider {
                 failCount++;
                 const errorMsg = err instanceof Error ? err.message : String(err);
                 this.outputChannel.appendLine(`  -> Error: ${errorMsg}`);
-                vscode.window.showWarningMessage(`Error en: ${label}`);
+                vscode.window.showWarningMessage(l10n.t('Error in: {0}', label));
             }
         }
 
         if (failCount === 0) {
-            vscode.window.showInformationMessage(`Prueba completada: ${successCount} comandos OK`);
+            vscode.window.showInformationMessage(l10n.t('Test completed: {0} commands OK', successCount));
         } else {
-            vscode.window.showWarningMessage(`Prueba completada con ${failCount} error(es)`);
+            vscode.window.showWarningMessage(l10n.t('Test completed with {0} error(s)', failCount));
         }
     }
 
@@ -317,7 +322,7 @@ export class ConfigurationWebviewProvider {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Code Pen - Configurar Rutinas</title>
+    <title>${l10n.t('ShDraw - Configure Routines')}</title>
     <link rel="stylesheet" href="${styleUri}">
 </head>
 <body>
